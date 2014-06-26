@@ -1,0 +1,35 @@
+digraph {
+	rankdir = LR
+	subgraph cluster_appl {
+		label = "ALSA Application"
+
+		appl_buf	[label = "buffer"]
+
+		subgraph cluster_jack {
+			label = "JACK plugin"
+			libjack	[label = "libjack", shape=box]
+		}
+
+	}
+
+	subgraph cluster_jackd {
+		label = "JACK server daemon"
+
+		jackd_buf	[label = "buffer"]
+
+		subgraph cluster_libffado {
+			label = "libffado"
+			libffado_buf	[label = "packet\nbuffer"]
+		}
+	}
+
+	subgraph cluster_kernel {
+		label = "kernel-land"
+		firewire	[label = "Linux\nfirewire\nsubsystem", shape = box]
+	}
+
+	appl_buf -> libjack [label = "JACK\nPCM node"]
+	libjack -> jackd_buf	[label = "IPC"]
+	jackd_buf	-> libffado_buf
+	libffado_buf	-> firewire	[label = "Firewire\nCharactor\nDevices"]
+}

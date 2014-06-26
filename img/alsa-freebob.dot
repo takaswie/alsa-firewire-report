@@ -1,0 +1,30 @@
+digraph {
+	rankdir = LR
+	subgraph cluster_appl {
+		label = "ALSA Application"
+
+		appl_buf	[label = "PCM\nbuffer"]
+
+		subgraph cluster_freebob {
+			label = "freebob plugin"
+
+			plugin_buf	[label = "buffer"]
+
+			subgraph cluster_libfreebob {
+				label = "libfreebob"
+
+				libfreebob_buf	[label = "packet\nbuffer"]
+			}
+		}
+
+	}
+
+	subgraph cluster_kernel {
+		label = "kernel-land"
+		firewire	[label = "Linux\nfirewire\nsubsytem", shape = box]
+	}
+
+	appl_buf -> plugin_buf	[label = "FreeBoB\nPCM node"]
+	plugin_buf	-> libfreebob_buf
+	libfreebob_buf	-> firewire	[label = "Firewire\nCharacter\nDevice"]
+}

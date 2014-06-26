@@ -1,0 +1,23 @@
+digraph {
+	rankdir = LR
+	subgraph cluster_appl {
+		label = "ALSA Application"
+
+		appl_buf	[label = "buffer"]
+
+		subgraph cluster_pulse {
+			label = "pulse plugin"
+			libpulse	[label = "libpulse", shape=box]
+		}
+
+	}
+
+	PulseAudio	[shape = box]
+	appl		[label = "PulseAudio applications", shape = box]
+	device		[label = "Devices", shape = box]
+
+	appl_buf	-> libpulse [label = "default\nPCM node"]
+	libpulse	-> PulseAudio	[label = "IPC"]
+	PulseAudio	-> appl
+	PulseAudio	-> device
+}

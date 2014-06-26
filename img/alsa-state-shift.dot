@@ -1,0 +1,76 @@
+digraph alsa_pcm_state {
+rankdir = LR
+splines = spline
+
+open	-> setup	-> prepared	-> running	-> disconnected [weight = 50, style = invis]
+
+prepared	-> open		// snd_pcm_hw_free
+setup		-> open		// snd_pcm_hw_free
+/*
+prepared	-> open		// snd_pcm_hw_params
+setup		-> open		// snd_pcm_hw_params
+*/
+open		-> open		// snd_pcm_hw_params
+running		-> xrun		// snd_pcm_update_state
+/*
+draining	-> disconnected	 snd_pcm_dev_disconnect
+*/
+open		-> disconnected	 //snd_pcm_dev_disconnect
+/*
+paused		-> disconnected	 snd_pcm_dev_disconnect
+*/
+prepared	-> disconnected	// snd_pcm_dev_disconnect
+running		-> disconnected	// snd_pcm_dev_disconnect
+setup		-> disconnected	// snd_pcm_dev_disconnect
+/*
+suspended	-> disconnected	// snd_pcm_dev_disconnect
+*/
+xrun		-> disconnected	// snd_pcm_dev_disconnect
+/*
+draining	-> setup	// snd_pcm_drain
+draining	-> setup	// snd_pcm_drain
+draining	-> setup	// snd_pcm_drain
+running		-> setup	// snd_pcm_drain
+draining	-> setup	// snd_pcm_drain
+paused		-> running	// snd_pcm_drain
+prepared	-> draining	// snd_pcm_drain
+*/
+prepared	-> prepared	// snd_pcm_drain
+prepared	-> setup	// snd_pcm_drain
+/*
+running		-> draining	// snd_pcm_drain
+*/
+running		-> setup	// snd_pcm_drain
+/*
+setup		-> draining	// snd_pcm_drain
+*/
+setup		-> setup	// snd_pcm_drain
+/*
+xrun		-> draining	// snd_pcm_drain
+draining	-> setup	// snd_pcm_drop
+paused		-> running	// snd_pcm_drop
+prepared	-> setup	// snd_pcm_drop
+running		-> setup	// snd_pcm_drop
+running		-> setup	// snd_pcm_drop
+setup		-> setup	// snd_pcm_drop
+*/
+xrun		-> setup	// snd_pcm_drop
+/*
+prepared	-> setup	// snd_pcm_hw_params
+setup		-> setup	// snd_pcm_hw_params
+*/
+open		-> setup	[weight = 50]// snd_pcm_hw_params
+/*
+prepared	-> prepared	// snd_pcm_prepare
+paused		-> prepared	// snd_pcm_prepare
+*/
+setup		-> prepared	[weight = 50]// snd_pcm_prepare
+/*
+suspended	-> prepared	// snd_pcm_prepare
+*/
+xrun		-> prepared	// snd_pcm_prepare
+/*
+draining	-> prepared	// snd_pcm_prepare - playback only
+*/
+prepared	-> running	[weight = 50]// snd_pcm_start
+}

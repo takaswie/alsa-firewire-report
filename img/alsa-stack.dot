@@ -1,0 +1,51 @@
+graph firewire_related_stacks {
+  graph [rankdir = TB, compound = true];
+
+	subgraph cluster0 {
+		label="ALSA Character Devices";
+
+		ctrl_cdev	[label="controlC%i", shape=box];
+		pcm_cdev	[label="pcmC%iD%i{c,p}", shape=box];
+		midi_cdev	[label="midiC%iD%i", shape=box];
+		hw_cdev		[label="hwC%iD%i", shape=box];
+
+	}
+
+	subgraph cluster1 {
+		label="ALSA Core";
+
+		ctrl	[label="control", shape=box];
+		pcm	[label="pcm", shape=box];
+		midi	[label="midi", shape=box];
+		hwdep	[label="hwdep", shape=box];
+		card	[label="card", shape=box];
+
+	}
+
+	ctrl_cdev	-- ctrl		-- snd_fw;
+	pcm_cdev	-- pcm		-- snd_fw;
+	midi_cdev	-- midi		-- snd_fw;
+	hw_cdev		-- hwdep	-- snd_fw;
+
+	snd_fw [label="ALSA Firewire drivers", shape=box];
+
+	snd_fw	-- cmp;
+	snd_fw	-- amdtp;
+	snd_fw	-- fcp;
+
+	subgraph cluster2 {
+		label="ALSA Firewire Stack";
+
+		cmp		[label="CMP", shape=box];
+		amdtp		[label="AMDTP", shape=box];
+		fcp		[label="FCP", shape=box];
+		isoc_res	[label="Isochronous Resources", shape=box]
+		packets_buf	[label="Packets Buffer", shape=box]
+		transaction	[label="Transaction", shape=box]
+	}
+
+	fcp		-- transaction;
+	cmp		-- transaction;
+	cmp		-- isoc_res;
+	amdtp		-- packets_buf
+}

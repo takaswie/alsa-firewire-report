@@ -1,0 +1,32 @@
+digraph ieee1394_layer
+{
+	compound=true
+
+	subgraph cluster_stack {
+		label = "Firewire core"
+
+		fw_card		[label = "Abstruct Layer", shape=box]
+		ohci_card	[label = "OHCI 1394 driver", shape=box];
+		dummy_card	[label = "Dummy driver", shape=box]
+	}
+
+
+	subgraph cluster_dev {
+		label="1394 Open Host Controller"
+
+		ohci_async_ctx	[label="Asynchronous Contexts", shape=box]
+		ohci_isoc_ctx	[label="Isochronous Contexts", shape=box]
+
+		bus_link_layer	[label = "IEEE 1394 Link Layer", shape=box]
+		bus_phys_layer	[label = "IEEE 1394 Phys Layer", shape=box]
+	}
+
+	fw_card		-> ohci_card
+	ohci_card	-> fw_card	[constraint = false]
+	fw_card		-> dummy_card
+	ohci_card	-> ohci_isoc_ctx	[label = "Register/DMA", lhead = cluster_dev]
+	ohci_async_ctx	-> ohci_card	[label = "Interrupts", ltail = cluster_dev]
+	ohci_async_ctx	-> bus_link_layer
+	ohci_isoc_ctx	-> bus_link_layer
+	bus_link_layer	-> bus_phys_layer
+}

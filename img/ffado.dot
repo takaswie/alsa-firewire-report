@@ -1,0 +1,34 @@
+graph ffado 
+{
+	rankdir = TB
+
+	j_app			[label = "JACK Applications",shape=box]
+	ffado_mixer		[label = "FFADO Mixer", shape=box]
+
+	j_app		-- jackd [label = "IPC"]
+	ffado_mixer	-- ffado_dbus_server [label = "IPC"]
+
+	subgraph cluster_ffado_apps {
+		label = "FFADO Applications"
+		jackd			[label = "JACK sound server", shape=box]
+		ffado_dbus_server	[label = "FFADO D-Bus server", shape=box]
+	}
+
+	jackd			-- libffado
+	ffado_dbus_server	-- libffado
+	libffado	[label = "libffado"]
+
+	libffado	-- libiec61883
+
+	libiec61883	[label = "libiec61883"]
+
+	libiec61883	-- libraw1394
+
+	libffado	-- libraw1394
+
+	libraw1394	[label = "libraw1394"]
+
+	libraw1394	-- juju [label = "I/O to /dev/fw*"]
+
+	juju	[label = "Linux Firewire stack"]
+}

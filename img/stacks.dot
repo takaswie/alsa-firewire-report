@@ -1,0 +1,80 @@
+digraph firewire_related_stacks {
+  graph [rankdir = TB, compound = true];
+
+	subgraph cluster0 {
+		label="ALSA Character Devices";
+
+		ctrl_cdev	[label="controlC%i", shape=box];
+		pcm_cdev	[label="pcmC%iD%i{c,p}", shape=box];
+		midi_cdev	[label="midiC%iD%i", shape=box];
+		hw_cdev		[label="hwC%iD%i", shape=box];
+
+	}
+
+	subgraph cluster1 {
+		label="ALSA Core";
+
+		ctrl_cdev	-> ctrl;
+		pcm_cdev	-> pcm;
+		midi_cdev	-> midi;
+		hw_cdev		-> hwdep;
+
+		ctrl	[label="control", shape=box];
+		pcm	[label="pcm", shape=box];
+		midi	[label="midi", shape=box];
+		hwdep	[label="hwdep", shape=box];
+		card	[label="card", shape=box];
+
+	}
+
+	ctrl	-> snd_fw;
+	pcm	-> snd_fw;
+	midi	-> snd_fw;
+	hwdep	-> snd_fw;
+	card	-> snd_fw;
+
+	snd_fw [label="ALSA Firewire drivers", shape=box];
+
+	snd_fw	-> cmp;
+	snd_fw	-> amdtp;
+	snd_fw	-> fcp_avc;
+	snd_fw	-> transaction;
+
+	subgraph cluster2 {
+		label="ALSA Firewire Stack";
+
+		cmp		[label="CMP", shape=box];
+		amdtp		[label="AMDTP", shape=box];
+		fcp_avc		[label="FCP/AVC", shape=box];
+		isoc_res	[label="Isochronous Resources", shape=box]
+		packets_buf	[label="Packets Buffer", shape=box]
+		transaction	[label="Transaction", shape=box]
+
+		fcp_avc		-> transaction;
+		cmp		-> transaction;
+		cmp		-> isoc_res;
+		amdtp		-> packets_buf
+	}
+
+	subgraph cluster3 {
+		label="Linux Firewire stack";
+
+		packets_buf	-> isoc_ctx;
+		amdtp		-> isoc_ctx;
+		transaction	-> async_ctx;
+		isoc_res	-> bus_management;
+
+		isoc_ctx	[label="Isochronous Contexts", shape=box]
+		async_ctx	[label="Asynchronous Contexts", shape=box]
+		bus_management	[label="Serial Bus Management", shape=box]
+
+		bus_management	-> isoc_ctx;
+		bus_management	-> async_ctx;
+	}
+
+	isoc_ctx	-> fw_card;
+	async_ctx	-> fw_card;
+
+	fw_card	[label="Firewire Card Driver Abstruct Layer", shape=box]
+}
+

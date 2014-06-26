@@ -1,0 +1,42 @@
+digraph fw_stack_high {
+	graph [rankdir = TB]
+
+	subgraph cluster_cdev {
+		label = "Firewire character devices"
+		fw	[label = "fw*", shape = "box"]
+	}
+
+	subgraph cluster_fw_core {
+		label = "Firewire core"
+
+		subgraph cluster_upper {
+			label = ""
+			style = invis
+
+			cdev		[label = "Methods (cdev)", shape = "box"]
+			device		[label = "Device", shape = "box"]
+			topology	[label = "Bus Topology", shape = "box"]
+		}
+		subgraph cluster_lower {
+			label = ""
+			style = invis
+
+			iso		[label = "Isochronous", shape = "box"]
+			transaction	[label = "Asynchronous", shape = "box"]
+		}
+		card		[label = "Abstruct layer (card)", shape = "box"]
+	}
+
+	fw		-> cdev
+	device		-> fw		[constraint = false]
+	topology	-> device	[constraint = false]
+	transaction	-> topology
+	cdev		-> iso
+	cdev		-> transaction	[ltail = "normal"]
+	device		-> transaction
+	iso		-> card
+	card		-> iso	[constraint = false]
+	transaction	-> card
+	card		-> transaction [constraint = false]
+}
+

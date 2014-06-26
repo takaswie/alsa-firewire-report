@@ -1,0 +1,33 @@
+================
+Enhancement of ALSA firewire stack
+================
+
+Description
+========
+June 2014, ALSA, Linux sound subsystem gained an enhancement of support for Firewire sound devices and Linux 3.16 merged it. This is a report of my work for the enhancement and also my memo.
+
+
+Status
+========
+Under writing the whole section.
+
+
+How to read
+========
+Please refer to firewire.pdf. I'll keep firewire.pdf is always the latest output.
+
+how to build
+========
+Need some softwares process text and images:
+ - GNU Make
+ - LaTeX
+ - Inkscape, to generate from svg
+ - Graphviz, to generate from dot
+
+Then execute make.
+
+Copyright
+========
+
+2014 Takashi Sakamoto
+

@@ -1,0 +1,48 @@
+digraph {
+	rankdir = LR
+
+	subgraph cluster_app {
+		label = "ALSA PCM Application"
+		appl_buffer [label = "buffer"]
+
+		appl_buffer	-> plugin1_buf [label = "PCM\nnode 1"]
+
+		subgraph cluster_alsa_runtime {
+			label = "ALSA PCM Runtime"
+
+			subgraph cluster_plugin0 {
+				label = "Plugin 1"
+				plugin1_buf [label = "buffer"]
+			}
+
+			plugin1_buf	-> plugin2_buf
+
+			subgraph cluster_plugin1 {
+				label = "Plugin 2"
+				plugin2_buf [label = "buffer"]
+			}
+
+			plugin2_buf	-> plugin3_buf
+
+			subgraph cluster_plugin2 {
+				label = "Plugin 3"
+				plugin3_buf [label = "buffer"]
+			}
+
+			plugin3_buf	-> hw_buf
+
+			subgraph cluster_hw {
+				label = "hw plugin"
+				hw_buf [label = "buffer"]
+			}
+		}
+	}
+
+	subgraph cluster_alsa {
+		label = "kernel-land"
+		alsa_core	[label = "ALSA Core", shape = box]
+	}
+
+	hw_buf		-> alsa_core	[label = "PCM\nCharacter\nDevice"]
+
+}
