@@ -11,12 +11,13 @@ Status
 ========
 Under writing the whole section.
 
+I have a little experiences for technical writing and English text. So this report may include mistakes in grammar. I'm happy if you inform such mistakes to me.
 
 How to read
 ========
-Please refer to firewire.pdf. I'll keep firewire.pdf is always the latest output.
+Please refer to firewire.pdf. I'll keep the file as the latest version of my report.
 
-how to build
+How to build
 ========
 Need some softwares process text and images:
  - GNU Make
