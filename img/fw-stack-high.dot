@@ -24,7 +24,7 @@ digraph fw_stack_high {
 			iso		[label = "Isochronous", shape = "box"]
 			transaction	[label = "Asynchronous", shape = "box"]
 		}
-		card		[label = "Abstruct layer (card)", shape = "box"]
+		card		[label = "Abstruct layer", shape = "box"]
 	}
 
 	fw		-> cdev

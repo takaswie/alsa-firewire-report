@@ -22,6 +22,7 @@ graph firewire_related_stacks {
 
 	}
 
+	card		-- snd_fw;
 	ctrl_cdev	-- ctrl		-- snd_fw;
 	pcm_cdev	-- pcm		-- snd_fw;
 	midi_cdev	-- midi		-- snd_fw;

@@ -68,11 +68,11 @@ IEEE 1394 isochronous communication guarantees to transfer packets at 8,000 time
 		\bitbox{4}{sy} \\
 		\wordbox{1}{header CRC}
 	\end{rightwordgroup} \\
-	\begin{rightwordgroup}{data block}
+	\begin{rightwordgroup}{packet payload}
 		\wordbox[tlr]{3}{data field} \\
 		\bitbox[blr]{16}{} &
 		\bitbox{16}{zero pad bytes (if necessary)} \\
-		\wordbox{1}{data CRC}
+		\wordbox{1}{payload CRC}
 	\end{rightwordgroup}
 \end{bytefield}
 \caption{Isochronous packet structure}
@@ -402,7 +402,7 @@ The receivers can use this pulse for PLL reference. This is a mechanism of 'cloc
 
 Most devices for production use have several ports for analog/digital audio input/output. Such devices have DSP to process several signals from/to the ports for internal mixing. This is 'zero latency hardware monitoring', which each vendor insists.
 
-In the DSP side, outgoing packets are the sink of audio signals or the source of audio signals. The DSP is between IEC 61883-1/6 layer and DAC/ADC for audio ports.
+In the DSP side, outgoing packet is a sink of audio signals and incoming packet is a source of audio signals. The DSP is between IEC 61883-1/6 layer and DAC/ADC for audio ports.
 
 The way to control the DSP behaviour depends on each chipset or model\cite{bebob-1}.
 
@@ -430,12 +430,12 @@ As described in former subsection, each AMDTP packet delivers 'presentation time
 	\label{duplex-timestamp}
 \end{figure}
 
-Moreover, in previous subsection, the sequence of value in SYT field can generate a pulse and the pulse can be selected as source of clock. This option means that a device can delegate 'timing master' to the transmitter.
+Moreover, in previous subsection, the sequence of value in SYT field can generate a pulse and the pulse can be selected as source of clock. This option means that a device can delegate 'timing master' to the generator.
 
 
 \subsection{Different formation of data channel in a packet}
 
-In IEC 61883-6\cite{iec61883-6-1, iec61883-6-2}, a packet can include several types of data, such like PCM samples, MIDI messages and IEC 60958 Conformant data. Each data is transferred by each data channel in packets. Each model has its own formation of data channels, depending on sampling frequency or a certain modes.
+In IEC 61883-6\cite{iec61883-6-1, iec61883-6-2}, a packet can include several types of data in each data block, such like PCM samples, MIDI messages and IEC 60958 Conformant data. Each data is transferred by each data channel in packets. Each model has its own formation of data channels, depending on sampling frequency or a certain modes.
 
 In IEC 61883-6:2005\cite{iec61883-6-2}, the position of each data channel is defined:
 \begin{verbatim}
@@ -460,13 +460,13 @@ Fireworks is a board module which Echo Audio produced. This module consists of t
 
 Fireworks use its own mechanism for transaction. Drivers transmit commands to a specific address on device, and receive responses to a specific address on controller. Fireworks has unique command sets. Although this transaction is transferred to specific addresses, there's another way to transfer commands and responses as AV/C vendor specific commands.
 
-Fireworks manages streams by CMP. Fireworks transfers AMDTP packets in blocking mode but Fireworks streams are not fully compliant to IEC 61883-1. In IEC 61883-1, the value of data block counter means the number of packets which has already transferred. But in Fireworks, it means the number of data blocks which has transferred including current packet.
+Fireworks manages streams by CMP and transfers AMDTP packets in blocking mode. But Fireworks streams are not fully compliant to IEC 61883-1. In IEC 61883-1, the value of data block counter means the number of packets which has already transferred. But in Fireworks, it means the number of data blocks which has transferred including current packet.
 
 
 \subsubsection{BeBoB}
 BeBoB is 'BridgeCo enhanced Breakout Box'. This is installed to firewire devices with DM1000/DM1100/DM1500 chipset. It gives common ways for host system to handle BeBoB based devices.
 
-BeBoB based devices can be controlled by CMP and vendor specific AV/C commands\cite{bebob-1,bebob-2}. BeBoB transfers AMDTP packets in blocking mode. BeBoB can be customized largely so there're some model specific operations out of its specification.
+BeBoB based devices can be controlled by CMP and vendor specific AV/C commands\cite{bebob-1,bebob-2}. But some BeBoB based devices needs both connections to transmit AMDTP outgoing stream. BeBoB transfers AMDTP packets in blocking mode. BeBoB can be customized largely so there're some model specific operations out of its specification.
 
 
 \subsubsection{OXFW970/971}
@@ -501,7 +501,7 @@ FFADO gives a library, libffado. This library uses 'libraw1394' to execute I/Os 
 
 FFADO also gives a daemon, 'ffado-dbus-server' as a FFADO application. As the name shows, this daemon uses D-Bus interfaces to give a way for the other applications to control device's internal mixer. Currently there're no applications to use this interface than ffado-mixer, which gives GUI with Qt4.
 
-Currently, there are no FFADO applications except for 'ffado-dbus-server' and JACK server daemon (jackd). The jackd uses libffado to packetize and transfer packets between devices. The jackd uses UNIX domain socket and System V Shared Memory to gather/distribute data to/from JACK application processes. 
+Currently, there are no FFADO applications except for 'ffado-dbus-server' and JACK \footnote{http://jackaudio.org/} server daemon (jackd). The jackd uses libffado to packetize and transfer packets between devices. The jackd uses UNIX domain socket and System V Shared Memory to gather/distribute data to/from JACK application processes. 
 
 \begin{figure}[H]
 	\centering
@@ -878,7 +878,7 @@ As of 2013, this functionality supports operations for iMPR/iPCR so as input con
 
 \subsubsection{FCP and transaction functionality}
 
-FCP functionality gives a function, fcp\_avc\_transaction() for FCP and AV/C commands. The drivers can transmit FCP request and wait for FCP response for 125 micro seconds. All of FCP requests should be retried when bus reset occurs, so fcp\_bus\_reset() is used for this purpose.
+FCP functionality gives a function, fcp\_avc\_transaction() for FCP and AV/C commands. The drivers can transmit FCP request and wait for FCP response for 125 millisecond. All of FCP requests should be retried when bus reset occurs, so fcp\_bus\_reset() is used for this purpose.
 
 FCP functionality internally uses snd\_fw\_transaction(). This is a wrapper function of fw\_run\_transaction() and supports retrying and generation constraint.
 
@@ -889,7 +889,7 @@ This module gives a structure for continuous packet buffer. Drivers initialize a
 
 \subsubsection{AMDTP functionality}
 
-This module gives a structure for AMDTP stream and some operations to handle an instance of the structure. This functionality uses the continuous packets buffer functionality internally. Drivers initialize an instance of the structure by amdtp\_stream\_init(). After initializing, amstp\_stream\_set\_parameters() is used to set streaming parameters such as sampling rate, the number of Multi Bit Linear Audio (MBLA) data channel or MIDI Conformant data channel for the stream. After setting parameters, amdtp\_stream\_get\_max\_payload() returns the maximum number of bytes of payload for a packet with current parameters.
+This module gives a structure for AMDTP stream and some operations to handle an instance of the structure. This functionality uses the continuous packets buffer functionality internally. Drivers initialize an instance of the structure by amdtp\_stream\_init(). After initializing, amstp\_stream\_set\_parameters() is used to set streaming parameters such as sampling rate, the number of Multi Bit Linear Audio (MBLA) data channel and MIDI Conformant data channel for the stream. After setting parameters, amdtp\_stream\_get\_max\_payload() returns the maximum number of bytes of payload for a packet with current parameters.
 
 Drivers can start the stream by amdtp\_stream\_start(). Then amdtp\_stream\_stop() is used to stop the stream. To release the stream, amdtp\_destroy\_stream() is used. When bus reset occurs, amdtp\_stream\_update() is used to prepare for changing node ID.
 
@@ -900,18 +900,20 @@ Drivers can start the stream by amdtp\_stream\_start(). Then amdtp\_stream\_stop
 	\label{{lifecycle-old-amdtp-stream}}
 \end{figure}
 
-There is a case that firewire-lib fails to continue streaming. It's to fail queueing. To check whether a stream is running or not, amdtp\_stream\_running() is used, and amdtp\_streaming\_error() is used to detect error. Once streaming becomes error state, the stream should be stopped by amdtp\_stream\_stop(), then start by amdtp\_stream\_start() again.
-
 For PCM component, firewire-lib gives helper functions. During streaming, To set PCM format, amdtp\_stream\_set\_pcm\_format() is used. To initialize PCM-related members of a stream, amdtp\_stream\_pcm\_prepare() is used. When starting/stopping PCM substream, amdtp\_stream\_pcm\_trigger() is used. To get the numbers of frames in PCM buffer, amdtp\_stream\_pcm\_pointer() is used. When killing PCM substreams, amdtp\_stream\_pcm\_abort() is used. To check PCM substream is running or not over a stream, amdtp\_stream\_pcm\_running() is used.
- 
-After queueing packets and isochronous context starts, firewire-ohci callbacks according to an 'interrupt' flag of packet structure.
+
+Let's see the detail to generate AMDTP outgoing packets in Figure \ref{fig:packetization-out}. The amdtp\_stream\_start() function queues a series of packets with a 'skip' flag, then firewire-ohci adds the packets into descriptor list. To the end of the series, the function sets 'interrupt' flag. When the 'interrupt' packet is queued, firewire-ohci sets special flag to a descriptor corresponding to the packet. After queueing, the amdtp\_stream\_start() function starts an isochronous context with a callback function. Then firewire-ohci starts to transfer descriptors to OHCI 1394 controller via DMA, and OHCI 1394 controller transmits packets corresponding to descriptors. When OHCI 1394 controller finish transmitting the 'interrupt' packet, it generates hardware interrupt. The firewire-ohci handles the hardware interrupt and schedules tasklet. When the tasklet is executed in software interrupt context, the callback function is executed. Then AMDTP functionality generates new series of packets with PCM samples, and queueing them. When queueing the end of a series of packets, the functionality sets the 'interrupt' flag again. When OHCI 1394 controller transmits this 'interrupt' packet, it generates hardware interrupt and snd-firewire-lib generates new series of packets and queues them.
 
 \begin{figure}[H]
 	\centering
-	\includegraphics{./img/packetization-former.svg.eps}
-	\caption{{Packetizing process}}
-	\label{{fig:packetization-former}}
+	\includegraphics{./img/packetization-out.svg.eps}
+	\caption{{Generating packets for out stream}}
+	\label{fig:packetization-out}
 \end{figure}
+
+As of 2013, AMDTP functionality uses 48 queues \footnote{QUEUE\_LENGTH in sound/firewire/amdtp.c} and 16 packets for interrupt interval \footnote{INTERRUPT\_INTERVAL in sound/firewire/amdtp.c}. So hardware interrupts nominally occur every 2 millisecond but this really depends on bandwidth for asynchronous communication. See Figure \ref{cycle-start}. Roughly, it takes 6 millisecond to transmit a first packet since staring isochronous context \footnote{In IEEE 1394, 8,000 packets are surely transferred in a second}.
+
+There is a case that firewire-lib fails to continue streaming. It's to fail queueing. To check whether a stream is running or not, amdtp\_stream\_running() is used, and amdtp\_streaming\_error() is used to detect error. Once streaming becomes error state, the stream should be stopped by amdtp\_stream\_stop(), then start by amdtp\_stream\_start() again.
 
 As of 2013, this functionality don't allows drivers to perform as a timing slave because incoming packets are not supported. Therefore, this functionality includes a generator for the sequence of value to SYT field. In non-blocking mode, the sequence should be corresponding to the number of events in each packet. So this functionality also includes a generator for the sequence of number of events. Generally, there's no common way to generate these sequence so they're one of implementing practices.
 
@@ -972,7 +974,7 @@ The firewire-lib newly supports these functionalities for AMDTP:
 	\item duplex streams with timestamp synchronization
 \end{itemize}
 
-This work renames prefix of 'amdtp\_out\_stream' to 'amdtp\_stream' for all of functions and members of AMDTP stream structure. This means the same structure is used for both directions.
+This work renames prefix of 'amdtp\_out\_stream' to 'amdtp\_stream' for all of functions and members of AMDTP stream structure, to use the same structure for both directions.
 
 \begin{figure}[htbp]
 	\centering
@@ -981,19 +983,42 @@ This work renames prefix of 'amdtp\_out\_stream' to 'amdtp\_stream' for all of f
 	\label{{lifecycle-new-amdtp-stream}}
 \end{figure}
 
-This work adds an argument for amdtp\_stream\_init(), to indicate the direction of AMDTP stream. After initialized, the instance of stream can be operated by the same way for both direction.
+This work newly adds a support for AMDTP in stream, and adds an argument for amdtp\_stream\_init(), to indicate the direction of AMDTP stream. After initialized, the instance of stream can be operated by the same way for both direction.
 
-This work newly adds amdtp\_stream\_wait\_callback() to wait for a first packet until given timeout. This is for detection for the case that drivers set wrong parameters for packets, i.e. tag. In this case, OHCI 1394 driver doesn't execute callback function of isochronous context. Then no packets are handled, and PCM component don't waken a process of PCM substream because 'avail' space has never been updated (section \ref{sec:alsa-pcm} to page \pageref{sec:alsa-pcm}). This function is expected to be used just after staring a stream. Drivers should handle error state when receive false.
+Let's see the detail to handle AMDTP incoming stream in Figure \ref{fig:packetization-in}. The mechanism is almost the same as generating outgoing packets, while there are two big differences.
+
+One is dequeueing packets instead of generating packets. When OHCI 1394 controller fills an 'interrupt' descriptor with an incoming packet, it generates a hardware interrupt. The firewire-ohci handles this hardware interrupt and schedules tasklet. When the tasklet is executed in software interrupt context, a callback function in snd-firewire-lib is executed. Then AMDTP functionality perform dequeueing and queueing packets.
+
+In current implementation, the length of queue and the interval of interrupt is the same for incoming/outgoing AMDTP stream. As a result, it nominally takes 2 millisecond to handle a first packet since the packet reached.
+
+Another is a functionality to detect discontinuity of the sequence of incoming AMDTP packets. Each AMDTP packet has DBC field for this purpose. In a case of the detection, the stream is stopped and corresponding PCM substream is aborted. In this case, the stream should be stopped and started again.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics{./img/packetization-in.svg.eps}
+	\caption{{Handling packets for in stream}}
+	\label{fig:packetization-in}
+\end{figure}
+
+This work newly adds amdtp\_stream\_wait\_callback() to wait for a first packet until given timeout. This is for detection of the case that drivers set wrong parameters for packets, i.e. tag for IEEE1394 isochronous packet. In this case, OHCI 1394 driver doesn't execute callback function in isochronous context. Then no packets are handled, and PCM component don't waken a process of PCM substream because 'avail' space has never been updated (section \ref{sec:alsa-pcm} to page \pageref{sec:alsa-pcm}). This function is expected to be used just after staring a stream, to prevent from this case. Drivers should handle error state when receive false.
 
 This work adds some flags for AMDTP stream structure, to handle device's quirks of stream. Between initializing and starting a stream, these flags can be set to an instance of the stream. Fireworks and BeBoB drivers use these flag.
 
-As a default, any AMDTP streams are not associated. For duplex streams with timestamp synchronization (section \ref{sec:duplex-streams} to page \pageref{sec:duplex-streams}), this work adds amdtp\_stream\_set\_sync(). This function associates two streams as a timing master and a timing slave with given synchronization mode, and this function should be called before starting streams. Currently CIP\_SYNC\_TO\_DEVICE is effective for this parameter. The case to use this option is that a timing master is incoming stream and a timing slave is outgoing stream. In this case, the value of SYT field in incoming packets are passed to outgoing packets. The packets in both direction are handled in interrupt context for an incoming isochronous context. In the other cases, there's no requirement to pass the value of SYT field between two streams.
+As a default, any AMDTP streams are not associated. For duplex streams with timestamp synchronization (section \ref{sec:duplex-streams} to page \pageref{sec:duplex-streams}), this work adds amdtp\_stream\_set\_sync(). This function associates two streams as a timing master and a timing slave with given synchronization mode, and this function should be called before starting streams. Currently CIP\_SYNC\_TO\_DEVICE is effective for this parameter and for AMDTP stream in blocking mode. The case to use this option is that a timing master is incoming stream and a timing slave is outgoing stream. In this case, the value of SYT field in incoming packets are passed to outgoing packets. The packets in both direction are handled in interrupt context for an incoming isochronous context. So a callback in isochronous context for outgoing stream is ignored. In the other cases, there's no requirement to pass the value of SYT field between two streams.
 
-This work adds a functionality to detect discontinuity of the sequence of incoming AMDTP packets. In a case of the detection, the stream is stopped and corresponding PCM substream is aborted. In this case, the stream should be stopped and started again.
+\begin{figure}[H]
+	\centering
+	\includegraphics{./img/packetization-duplex.svg.eps}
+	\caption{{Handling associated duplex streams}}
+	\label{fig:packetization-duplex}
+\end{figure}
+
 
 This work newly adds a support of MIDI substream to AMDTP stream. During streaming, each drivers can trigger MIDI messages with amdtp\_stream\_midi\_trigger(). Some models ignore MIDI messages in more than 8 data blocks in an packet. This may be due to a gap of data rate between MIDI bus and IEEE 1394 bus. To handle this quirk, struct amdtp\_stream.rx\_blocks\_for\_midi is used.
 
-For PCM component, this work newly adds amdtp\_stream\_add\_hw\_constraints() to add PCM constraint according to parameters of AMDTP stream. This function should be called after all of needed flags are set to an instance of AMDTP stream structure. This work also enables drivers to call amdtp\_stream\_set\_pcm\_format() during streaming. This is for the case that PCM substream is going to join in AMDTP stream, which MIDI substream already starts.
+For PCM component, this work newly adds amdtp\_stream\_add\_hw\_constraints() to add PCM constraint according to parameters of AMDTP stream. This function should be called after all of needed flags are set to an instance of AMDTP stream structure.
+
+This work also enables drivers to call amdtp\_stream\_set\_pcm\_format() during a stream is running. This is for the case that PCM substream is going to join in AMDTP stream which MIDI substream already starts.
 
 \subsection{Enhancement for CMP}
 
@@ -1001,17 +1026,25 @@ This work adds an argument to cmp\_connection\_init(), to indicate direction. Af
 
 Each driver can read iPCR/oPCR by transaction in any time. To confirm no drivers handle the device, cmp\_connection\_check\_used() is used. This is a consideration about user-land driver.
 
+I note that the value of payload field in iPCR is not used to keep bandwidth because some device chip reports a wrong value. Instead of this, snd-firewire-lib uses the value of data\_block\_quadlets member in struct amdtp\_stream.
+
 \subsection{Enhancement for FCP}
 
-This work enables firewire-lib to handle deferred transaction. According to AV/C General specification\cite{avc-general-4-2}, receivers of AV/C command should respond to transmitter within 100 micro seconds, while the receivers send an intermediate response within 100 micro seconds, and send a final response later. This is deferred transaction. The interval between the intermediate and final response is undefined. But to promise to return to caller, firewire-lib uses 125 micro seconds interval.
+This work enables firewire-lib to handle deferred transaction. According to AV/C General specification\cite{avc-general-4-2}, receivers of AV/C command should respond to transmitter within 100 millisecond, while the receivers send an intermediate response within 100 millisecond, and send a final response later. This is deferred transaction. The interval between the intermediate and final response is undefined. But to promise to return to caller, firewire-lib uses 125 millisecond interval.
 
 Additionally, this work adds three AV/C commands, which seems to be used in some drivers. They're INPUT/OUTPUT SIGNAL FORMAT command and PLUG INFO command in AV/C General specification\cite{avc-general-4-2}.
 
+\section{Driver implementation}
 
-\subsection{BeBoB driver}
+This work add new functionalities to ALSA firewire stack. So new drivers can be developed and existed drivers can be updated for both of PCM/MIDI playback/capture.
 
+PCM functionality of each driver has SND\_PCM\_INFO\_BATCH flag because the driver uses a part of packet queue for each PCM period.
 
-\subsection{Fireworks driver}
+PCM functionality also has SND\_PCM\_INFO\_BLOCK\_TRANSFER flag because PCM frames are transferred at each interrupt by the number of data blocks in some packets \footnote{QUEUE\_LENGTH in /sound/firewire/amdtp.c}.
+
+PCM samples are copied to each data blocks in its order and the posision of PCM samples in a data block is linear, so SNDRV\_PCM\_INFO\_INTERLEAVED should be used.
+
+In most case, incoming/outgoing AMDTP streams should be the same sampling rate, so SNDRV\_PCM\_INFO\_JOINT\_DUPLEX should be used. Each drivers should restrict sampling rate for both playback/capture as the same.
 
 
 \section{Rest of issue}
@@ -1035,12 +1068,41 @@ Some Fireworks based devices sometimes transfer packets with disorder. Such sequ
 I confirm the disorder does not always occurs. Further investigation is needed to judge better solution.
 
 \subsection{A lack of throttles for MIDI messages in outgoing stream}
-In MIDI specification, the phy layer can transfer 3,125bit per sec. But in IEC 61883-6\cite{iec61883-6-1, iec61883-6-2} and MMA/AMEI RP-027\cite{amei-rp27}, the stream can transfer MIDI messages by one eighth of sampling rate, for example, 6,000 bytes at 48.0kHz. So devices must buffer the gap between these data rate.
+In MIDI specification, its phy layer can transfer 31,250 bit per seccond. This equals to 3,906 Byte per second. But in IEC 61883-6\cite{iec61883-6-1, iec61883-6-2} and MMA/AMEI RP-027\cite{amei-rp27}, the stream can transfer MIDI messages by one eighth of sampling transmit frequency (STF). This is really much than MIDI specification so devices must buffer the gap between these data rate.
+
+\begin{table}[H]
+	\centering
+	\caption{{Data rate for MIDI message over IEEE 1394 bus}}
+	\label{tbl:midi-rate}
+	\begin{tabular}{cc} \toprule
+		STF	& Bit per second \\ \midrule
+		32,000	& 4,000.0	\\
+		44,100	& 5,512.5	\\
+		48,000	& 6,000.0	\\
+		88,200	& 11,025.0	\\
+		96,000	& 12,000.0	\\
+		176,400	& 22,050.0	\\
+		192,000	& 24,000.0	\\ \bottomrule
+	\end{tabular}
+\end{table}
+
 A few devices have buffer-over-flow when receiving much MIDI messages. For example, M-Audio Firewire 1814 transfer discontinuous packets when receiving much MIDI messages. There're some devices which ignores MIDI messages in more than first 8 data blocks in a packet.
 In this reason, ALSA Firewire stack should have a throttle for MIDI messages in outgoing stream.
 
 \subsection{A lack of arrangement for severe latency}
-Currently, the minimum number of frames per period is not less than 5 micro seconds. The drivers PCM component has a flag, SNDRV\_PCM\_INFO\_BATCH and the minimum number of periods in buffer is 2. As a result, the minimum latency is over 10 micro seconds. For more severe latency, further work is needed.
+Currently, the minimum number of frames per period is not less than 5 millisecond. PCM component of each driver has a flag, SNDRV\_PCM\_INFO\_BATCH and the minimum number of periods in buffer is 2. As a result, the minimum latency is over 10 millisecond. For severe latency, the size of period should be as smaller as possible.
+
+Ideally, the number of PCM frames in a period should be the number of data blocks in packets of one interrupt. But in both of blocking and non-blocking mode, the number of data blocks in packets of one interrupt is different. See Figure \ref{fig:interrupt-period}. In this figure, the interval of SYT is 8 data blocks, the number of packets in an interrupt is 4, the number of PCM frames in an period is 16. In blocking mode, PCM period is elapsed two times in 3rd interrupt. In non-blocking mode, PCM period is elapsed two times in 5th interrupt. These don't follow an idea of PCM period (section \ref{sec:alsa-pcm} to page \pageref{sec:alsa-pcm}).
+
+\begin{figure}[H]
+	\centering
+	\includegraphics{./img/interrupt-period.svg.eps}
+	\caption{{Packets, interrupt and PCM period}}
+	\label{fig:interrupt-period}
+\end{figure}
+
+To apply severe latency, the interrupt interval should be changed dynamically according to sampling transmission frequency and the number of frames in a period. But this needs correct calcularion and expectation of the number of packets till next PCM period. But they are a bit complicated. So current implementation uses 5 miliseconds to ensure that at least one interrupt occurs between PCM periods.
+
 
 \subsection{A few devices freeze when frequent establishing/breaking connections}
 'PreSonus FP10' can freeze when frequent establishing/breaking connections. This brings a disadvantage to PulseAudio. When PulseAudio detects the card, it starts/stops 4 streams at least. Currently PulseAudio cannot detect devices with non-surround channels. But when making PulseAudio detects the device with dbus rule and PulseAudio profiles, it may take the device freezing.
@@ -1049,7 +1111,7 @@ Currently, the minimum number of frames per period is not less than 5 micro seco
 Various results are confirmed with Fireworks/BeBoB at bus reset. They're depending on cases:
 \begin{description}
 \item{Case 1. Software bus reset} \mbox{} \\
-When generating bus reset with ffado-test or jujuutils\footnote{https://code.google.com/p/jujuutils/}, streaming stopped suddenly. When generating bus reset, the drivers update connections according to IEC 61883-1. But after a few hundred micro seconds, the device break connections by itself. I don't know the reason exactly but I guess the synchronizing mechanism I described has some relations.
+When generating bus reset with ffado-test or jujuutils\footnote{https://code.google.com/p/jujuutils/}, streaming stopped suddenly. When generating bus reset, the drivers update connections according to IEC 61883-1. But after a few hundred millisecond, the device break connections by itself. I don't know the reason exactly but I guess the synchronizing mechanism I described has some relations.
 \item{Case 2. Connecting devices or removing devices on the bus} \mbox{} \\
 This case depends on which devices are connected or removed. If they're Fireworks/BeBoB based devices, streaming sometimes continues and sometimes stops. If they're not Fireworks/BeBoB based device, streaming continues. I don't know the reason exactly but I guess the synchronizing mechanism I describe have some relations. 
 \end{description}
