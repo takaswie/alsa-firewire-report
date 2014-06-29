@@ -283,7 +283,7 @@ OHCI 1394 represents both of asynchronous and isochronous communication as conte
 
 \section{Device features}
 
-The sound devices for production use have unique features which usual sound devices don't have. Some of the features require softwares to handle them. In this section, I describe such features to consider software implementation.
+The sound devices for production have unique features which usual sound devices don't have. In this section, I describe such features to consider software implementation.
 
 \subsection{Clock recovery}
 \label{sec:clock-recovery}
@@ -399,12 +399,13 @@ The receivers can use this pulse for PLL reference. This is a mechanism of 'cloc
 
 
 \subsection{Signal processing for internal mixing}
+\label{sec:internal-mixing}
 
 Most devices for production use have several ports for analog/digital audio input/output. Such devices have DSP to process several signals from/to the ports for internal mixing. This is 'zero latency hardware monitoring', which each vendor insists.
 
 In the DSP side, outgoing packet is a sink of audio signals and incoming packet is a source of audio signals. The DSP is between IEC 61883-1/6 layer and DAC/ADC for audio ports.
 
-The way to control the DSP behaviour depends on each chipset or model\cite{bebob-1}.
+The way to control the DSP behaviour depends on each chipset or model.
 
 \subsection{Some options for sampling clock source for DSP}
 
@@ -433,9 +434,9 @@ As described in former subsection, each AMDTP packet delivers 'presentation time
 Moreover, in previous subsection, the sequence of value in SYT field can generate a pulse and the pulse can be selected as source of clock. This option means that a device can delegate 'timing master' to the generator.
 
 
-\subsection{Different formation of data channel in a packet}
+\subsection{Different formation of data channel in a data block of packet}
 
-In IEC 61883-6\cite{iec61883-6-1, iec61883-6-2}, a packet can include several types of data in each data block, such like PCM samples, MIDI messages and IEC 60958 Conformant data. Each data is transferred by each data channel in packets. Each model has its own formation of data channels, depending on sampling frequency or a certain modes.
+In IEC 61883-6\cite{iec61883-6-1, iec61883-6-2}, a data block of packet can include several types of data channel. Each data is transferred by each data channel in packets. For example, Multi Bit Linear Audio (MBLA) data channel for PCM samples, MIDI Conformant data channel for MIDI messages and IEC 60958 Conformant data channel for IEC 60958 PCM samples.
 
 In IEC 61883-6:2005\cite{iec61883-6-2}, the position of each data channel is defined:
 \begin{verbatim}
@@ -443,12 +444,11 @@ IEC 60958 Conformant Data < Multi-bit Linear Audio <
 	MIDI Conformant Data < SMPTE Time Code < Sample Count
 \end{verbatim}
 
-The way to retrieve information about the formation depends on each chipset.
-
+Each model has its own formation of data channels, depending on sampling frequency or a certain modes, even if these models apply the same chipset. The way to retrieve information about the formation depends on each chipset.
 
 \subsection{Chipset specific operations and quirks}
 
-Although there are some public specifications, each device has each quirks due to chipset or vendor's customization. Currently quirks of four types of chipset are clear.
+Although there are some specifications, each device has specific quirks due to chipset or vendor's customization. Especially, the way to control DSP is largely different. Currently quirks of four chipsets are clear.
 
 \subsubsection{Fireworks}
 Fireworks is a board module which Echo Audio produced. This module consists of three chipsets:
@@ -458,33 +458,40 @@ Fireworks is a board module which Echo Audio produced. This module consists of t
 \item Flash Memory to store firmwares
 \end{itemize}
 
-Fireworks use its own mechanism for transaction. Drivers transmit commands to a specific address on device, and receive responses to a specific address on controller. Fireworks has unique command sets. Although this transaction is transferred to specific addresses, there's another way to transfer commands and responses as AV/C vendor specific commands.
+Fireworks uses its own mechanism for transaction. Drivers transmit commands to a specific address on device, and the device transmit responses to a specific address on controller. Therefore Fireworks has unique command sets. Although this transaction is transferred to specific addresses, there's another way to transfer commands and responses as AV/C vendor specific commands.
 
-Fireworks manages streams by CMP and transfers AMDTP packets in blocking mode. But Fireworks streams are not fully compliant to IEC 61883-1. In IEC 61883-1, the value of data block counter means the number of packets which has already transferred. But in Fireworks, it means the number of data blocks which has transferred including current packet.
+Fireworks manages streams by CMP and transfers AMDTP packets in blocking mode. But Fireworks streams are not fully compliant to IEC 61883-1. In IEC 61883-1, the value of data block counter means the number of packets which has already transferred. But in Fireworks, it means the number of data blocks which has transferred including current packet. Furthermore, its empty packets are transferred at tag b00 in isochronous packet.
 
 
 \subsubsection{BeBoB}
 BeBoB is 'BridgeCo enhanced Breakout Box'. This is installed to firewire devices with DM1000/DM1100/DM1500 chipset. It gives common ways for host system to handle BeBoB based devices.
 
-BeBoB based devices can be controlled by CMP and vendor specific AV/C commands\cite{bebob-1,bebob-2}. But some BeBoB based devices needs both connections to transmit AMDTP outgoing stream. BeBoB transfers AMDTP packets in blocking mode. BeBoB can be customized largely so there're some model specific operations out of its specification.
+BeBoB uses CMP to maintain AMDTP streams but some BeBoB based devices need both connections to transmit AMDTP stream. BeBoB transfers AMDTP packets in blocking mode.
+
+BeBoB supports AV/C General command \cite{avc-general-4-2}, AV/C Audio Subunit command \cite{avc-audio-1}, AV/C Music Subunit command \cite{avc-music-1} and AV/C Descriptor Mechanism \cite{avc-general-enhancement}. Furthermore, BeBoB uses its own extension of AV/C commands \cite{bebob-1, bebob-2}. But BeBoB can be customized largely so there're some model specific operations so these commands are not always used.
 
 
 \subsubsection{OXFW970/971}
-OXFW970/971 was produced by Oxford Semiconductor. OXFW970/971 based devices can be controlled by CMP and generic AV/C commands. OXFW970/971 transfers AMDTP packet in non-blocking mode.
+OXFW970/971 was produced by Oxford Semiconductor.
 
+OXFW970/971 uses CMP to maintain AMDTP streams and transfers AMDTP packet in non-blocking mode.
+
+OXFW970/971 support AV/C general command \cite{avc-general-4-2} and AV/C Audio subunit command \cite{avc-audio-1}.
 
 \subsubsection{Dice}
 Dice is Digital Interface Communications Engine which TC Applied Technologies produces.
 
-Dice doesn't use CMP or any AV/C commands, although Dice can be controlled by read/write transactions to specific register. Dice has unique mechanism to notify status change. This notification is delivered to a specific address on controller.
+Dice doesn't use CMP or any AV/C commands, although uses read/write transactions to specific register for this purpose. Dice has unique mechanism to notify status change. This notification is delivered to a specific address on controller and drivers can indicate the address.
 
-Dice transfers AMDTP packet in blocking mode. But Dice is not fully compliant to IEC 61883-6. At higher sampling rate, Dice transfers AMDTP packets with double count of data blocks at a half of rate than IEC 61883-6. For example, in IEC 61883-6, at 192.0kHz in blocking mode, an AMDTP packet includes 32 data blocks. But Dice transfers AMDTP packets with 64 data blocks at 96.0kHz.
+Dice transfers AMDTP packets in blocking mode. But Dice is not fully compliant to IEC 61883-6. At higher sampling rate, Dice transfers AMDTP packets with double count of data blocks at a half of rate than IEC 61883-6. For example, in IEC 61883-6, at 192.0kHz in blocking mode, an AMDTP packet includes 32 data blocks. But Dice transfers AMDTP packets with 64 data blocks at 96.0kHz. This is called as 'dual wire'.
 
 
 \section{Existing drivers}
 
+In previous section, I describe device features and chipset quirks. In this section, let's see current implementation for them.
+
 \subsection{FFADO}
-FFADO is a project to develop user-land drivers for firewire sound devices and FreeBoB is a ancestral project of FFADO. Daniel Wagner started this project to develop driver for BridgeCo Enhanced Breakout Box (BeBoB) based devices in 2004. Daniel was in BridgeCo AG and had a contract to disclose relevant resources to the other developers. Later, Peter Palmer joined, The code base of FFADO grew up by them. In 2006, Jonathan Woithe joined in this project. He worked for drivers for MOTU devices. In 2007, to support more devices, FFADO project began.
+FFADO is a project to develop user-land drivers for firewire sound devices. FreeBoB is a ancestral project of FFADO and Daniel Wagner started this project to develop driver for BridgeCo Enhanced Breakout Box (BeBoB) based devices in 2004. Daniel was in BridgeCo AG and had a contract to disclose relevant resources to the other developers. Later, Peter Palmer joined, The code base of FFADO grew up by them. In 2006, Jonathan Woithe joined in this project. He worked for drivers for MOTU devices. In 2007, to support more devices, FFADO project began.
 
 As of 2014, FFADO supports:
 \begin{itemize}
@@ -501,7 +508,7 @@ FFADO gives a library, libffado. This library uses 'libraw1394' to execute I/Os 
 
 FFADO also gives a daemon, 'ffado-dbus-server' as a FFADO application. As the name shows, this daemon uses D-Bus interfaces to give a way for the other applications to control device's internal mixer. Currently there're no applications to use this interface than ffado-mixer, which gives GUI with Qt4.
 
-Currently, there are no FFADO applications except for 'ffado-dbus-server' and JACK \footnote{http://jackaudio.org/} server daemon (jackd). The jackd uses libffado to packetize and transfer packets between devices. The jackd uses UNIX domain socket and System V Shared Memory to gather/distribute data to/from JACK application processes. 
+Currently, there are no FFADO applications except for 'ffado-dbus-server' and JACK \footnote{http://jackaudio.org/} server daemon (jackd). The jackd uses libffado to packetize and transfer packets to/from devices. The jackd uses UNIX domain socket and System V Shared Memory to gather/distribute data to/from JACK application processes. 
 
 \begin{figure}[H]
 	\centering
@@ -513,7 +520,7 @@ Currently, there are no FFADO applications except for 'ffado-dbus-server' and JA
 \subsection{ALSA Firewire stack}
 There're no actions till 2010 to support firewire sound devices. An ALSA developer, Clemens Ladisch, started his work for ALSA firewire stack in 2010. In 2011, some stuffs were merged to ALSA upstream. This is a beginning of ALSA Firewire stack. In this time, 'snd-firewire-speakers' was committed for two models of OXFW970/971 based devices. In 2012, 'snd-scs1x' was committed as MIDI only driver for Stanton SC System 1\footnote{This model has its own way to transmit/receive MIDI messages.}. In 2013, 'snd-dice' was committed as playback only driver for Dice based devices.
 
-As of 2013, ALSA firewire stack generally supports PCM playback only, while FFADO supports more functionality. If there're some ways to bridge ALSA and FFADO, It doesn't matter that ALSA firewire stack is so weak. In next section, I investigate ALSA implementation in user-land to seek a solution for this issue.
+As of 2013, ALSA firewire stack generally supports PCM playback only, while FFADO supports more functionality. If there're some ways for ALSA applications to use FFADO, or there're some ways in user-land for ALSA applications to access the sound devices, it doesn't matter that ALSA firewire stack is so cheap. In next section, I investigate ALSA implementation in user-land to seek a solution for this issue.
 
 
 \section{Investigation of user-land driver for ALSA}
@@ -768,7 +775,7 @@ On the other hand, the another pointer, 'hw\_ptr' is changed by drivers when han
 
 The two pointers, 'hw\_ptr' and 'appl\_ptr', are used to check 'avail' space for application. The 'avail' space is the number of frames currently available for applications. For playback application, the 'avail' space equals to a space without PCM frames. For capture application, the 'avail' space equals to a space with PCM frames. When hw plugin writes or reads frames with non-blocking operation, functions instantly return if the 'avail' space has less frames than requested frames. When hw plugin writes or reads frames with blocking operation, the application is blocked until timeout or all of requested frames are transferred. As a default, the timeout is 10 sec. The timeout means 'hw\_ptr' has never changed during the 10 sec and there may be some troubles about interrupt handler. But this behaviour is changed with 'NO\_PERIOD\_WAKEUP' hardware flag\footnote{SNDRV\_PCM\_HW\_PARAMS\_NO\_PERIOD\_WAKEUP} for PCM substream. If driver supports this functionality, the timeout is expanded to the maximum number which Linux process-scheduler supports\footnote{MAX\_SCHEDULE\_TIMEOUT in include/linux/sched.h}. In this mode, hardware interrupts should be generated periodically and drivers are sure to handle them.
 
-When applications executes poll(2) for descriptors gained by snd\_pcm\_poll\_descriptors() with hw plugin, the process is blocked by default till timeout or 'avail' space has a rest. PCM Component has two modes for this behaviour. One is interrupt-base, as described. Another is a combination of both the interrupt-base and timer-base. When using the combination mode, snd\_pcm\_poll\_descriptors() returns two descriptors for both PCM character device and Timer character device. Both of them wake up per period but the source of timer is different. The way to change the mode is to set 'period\_event' software parameter for PCM runtime, by snd\_pcm\_sw\_params\_set\_period\_event(). PulseAudio uses a combination of 'NO\_PERIOD\_WAKEUP' hardware parameter and period\_event' software parameter for its 'glitch free' operation\footnote{Features/GlitchFreeAudio http://fedoraproject.org/wiki/Features/GlitchFreeAudio}.
+When applications executes poll(2) for descriptors gained by snd\_pcm\_poll\_descriptors() with hw plugin, the process is blocked by default till timeout or 'avail' space has a rest. PCM Component has two modes for this behaviour. One is interrupt-base, as described. Another is a combination of both the interrupt-base and timer-base. When using the combination mode, snd\_pcm\_poll\_descriptors() returns two descriptors for both PCM character device and Timer character device. Both of them wake up per period but the source of timer is different. The way to change the mode is to set 'period\_event' software parameter for PCM runtime, by snd\_pcm\_sw\_params\_set\_period\_event(). PulseAudio uses a combination of 'NO\_PERIOD\_WAKEUP' hardware parameter and 'period\_event' software parameter for its 'glitch free' operation\footnote{Features/GlitchFreeAudio http://fedoraproject.org/wiki/Features/GlitchFreeAudio}.
 
 The rest of buffer is 'hw\_avail', available space for devices. For applications, the 'hw\_avail' is the space for rewinding. The applications can reverse 'appl\_ptr' by the number of frames in 'hw\_avail'.
 
@@ -947,10 +954,9 @@ Additionally, Each driver require these functionalities:
 
 Furthermore, each driver should prevent from disturbing user-land drivers. Dice driver already gives these functionalities via hwdep interface:
 \begin{itemize}
-\item Retrieving device capability by transaction
+\item Giving Firewire node information corresponding to ALSA card
 \item Notifying to start/stop streaming
 \item Locking/Unlocking streaming
-\item Giving Firewire node information
 \end{itemize}
 
 Comparing to an idea to implement drivers in user-land, an idea to implement it in kernel-land has less issues of communication to ALSA application because this idea can use ALSA Core. This idea gives good transparency to ALSA applications. Moreover, there's already ALSA firewire stack for firewire drivers. The stack has a lack of some requirements but an enhancement of the stack is less work than implementation in user-land.
@@ -1036,15 +1042,52 @@ Additionally, this work adds three AV/C commands, which seems to be used in some
 
 \section{Driver implementation}
 
-This work add new functionalities to ALSA firewire stack. So new drivers can be developed and existed drivers can be updated for both of PCM/MIDI playback/capture.
+These new functionalities help to develop new drivers. Furthermore, existed drivers can be updated for both PCM/MIDI playback/capture.
 
-PCM functionality of each driver has SND\_PCM\_INFO\_BATCH flag because the driver uses a part of packet queue for each PCM period.
+\subsection{Common functionality}
 
-PCM functionality also has SND\_PCM\_INFO\_BLOCK\_TRANSFER flag because PCM frames are transferred at each interrupt by the number of data blocks in some packets \footnote{QUEUE\_LENGTH in /sound/firewire/amdtp.c}.
+PCM functionality of each driver has SND\_PCM\_INFO\_BATCH flag because the driver uses a part of packet queues for each PCM period. PCM functionality also has SND\_PCM\_INFO\_BLOCK\_TRANSFER flag because PCM frames are transferred at each interrupt by the number of data blocks in some packets \footnote{QUEUE\_LENGTH in /sound/firewire/amdtp.c}. PCM samples are copied to each data blocks in its order and the position of PCM samples in a data block is linear, so SNDRV\_PCM\_INFO\_INTERLEAVED should be used. If devices supports both streams, in most case, incoming/outgoing AMDTP streams should be the same sampling rate, so SNDRV\_PCM\_INFO\_JOINT\_DUPLEX should be used. Each drivers should restrict sampling rate for both playback/capture as the same. If current source of clock is not internal or recovered clock (section \ref{sec:clock-recovery} to page \pageref{sec:clock-recovery}), the sampling rate should not be changed.
 
-PCM samples are copied to each data blocks in its order and the posision of PCM samples in a data block is linear, so SNDRV\_PCM\_INFO\_INTERLEAVED should be used.
+MIDI functionality is supported. Most devices have a pair of input/output port but a few devices have several ports.
 
-In most case, incoming/outgoing AMDTP streams should be the same sampling rate, so SNDRV\_PCM\_INFO\_JOINT\_DUPLEX should be used. Each drivers should restrict sampling rate for both playback/capture as the same.
+Hwdep functionality is used to the same purpose as Dice driver uses. Additionally some drivers implement its own operation into hwdep interface.
+
+To help debug, the drivers add proc nodes under the card's firewire subdirectory. When reporting bugs, users should also reports output from these nodes.
+
+For most devices, the drivers has no control functionality. The usage of this functionality is to control device's DSP behaviour (section \ref{sec:internal-mixing} to page \pageref{sec:internal-mixing}). But this can be achieved by user-land implementation. For this purpose, currently, ffado-dbus-server/ffado-mixer are one of recommendations.
+
+
+\subsection{Fireworks driver}
+
+Fireworks driver locates in sound/firewire/fireworks/ and consists of 9 files. When initializing, the module register a handler into a certain address to receive responses of Fireworks transaction. The structure of Fireworks transaction is in include/uapi/sound/firewire.h.
+
+\begin{verbatim}
+#define SND_EFW_TRANSACTION_USER_SEQNUM_MAX	((__u32)((__u16)~0) - 1)
+/* each field should be in big endian */
+struct snd_efw_transaction {
+        __be32 length;
+        __be32 version;
+        __be32 seqnum;
+        __be32 category;
+        __be32 command;
+        __be32 status;
+        __be32 params[0];
+};
+\end{verbatim}
+
+ALSA applications can transmit request by writing hwdep interface. Each instance of fireworks driver has a queue to store the responses and ALSA applications can read them via hwdep interface, too. There is a rule for request that ALSA applications must use the correct value for 'seqnum' member between 0 to SND\_EFW\_TRANSACTION\_USER\_SEQNUM\_MAX because value of out of the range is used by the driver itself. The driver doesn't implement whole fireworks commands, implements needed commands to maintain streams or help debug.
+
+To support much quirks of AMDTP packets, the driver apply several flags to amdtp structure, but CMP is normal and separately from each direction. 
+
+\subsection{BeBoB driver}
+
+BeBoB driver locates in sound/firewire/bebob/ and consists of 12 files. To handle vendor specific operation, the driver has several files for each vendor. Especially, M-Audio largely customized and two models \footnote{Firewire 1814 and ProjectMix I/O} have many specific operations. These devices also has write-only controls. Because of these controls, the driver adds Control interface.
+
+BeBoB has a quirk at bus reset. It transmits packets with disorder just after bus reset. To recover from this discontinuity, the driver uses Linux completion and serialize PCM component .prepare() call and firewire subsystem .update() call.
+
+\subsection{Dice driver}
+
+\subsection{OXFW driver}
 
 
 \section{Rest of issue}
@@ -1075,7 +1118,7 @@ In MIDI specification, its phy layer can transfer 31,250 bit per seccond. This e
 	\caption{{Data rate for MIDI message over IEEE 1394 bus}}
 	\label{tbl:midi-rate}
 	\begin{tabular}{cc} \toprule
-		STF	& Bit per second \\ \midrule
+		STF	& Byte per second \\ \midrule
 		32,000	& 4,000.0	\\
 		44,100	& 5,512.5	\\
 		48,000	& 6,000.0	\\
@@ -1115,6 +1158,17 @@ When generating bus reset with ffado-test or jujuutils\footnote{https://code.goo
 \item{Case 2. Connecting devices or removing devices on the bus} \mbox{} \\
 This case depends on which devices are connected or removed. If they're Fireworks/BeBoB based devices, streaming sometimes continues and sometimes stops. If they're not Fireworks/BeBoB based device, streaming continues. I don't know the reason exactly but I guess the synchronizing mechanism I describe have some relations. 
 \end{description}
+
+\subsection{A lack of Control interface}
+
+To reduce maintaining effort and source code base, ALSA firewire stack and firewire drivers basically have no Control interface. But the sound devices needs software implementation to control DSP behaviour (section \ref{sec:internal-mixing} to page \pageref{sec:internal-mixing}).
+
+Currently, ffado-dbus-server/ffado-mixer is one of recommendation for this purpose but these implementations are isolated from ALSA applications.
+
+Like ALSA PCM interface, ALSA Control interface has External Control plugins in alsa-lib. So it may be possible to give ways to control DSP for ALSA applications.
+
+But there is an issue that a few devices have write-only control so there is a need to prepare for permanent storage.
+
 
 \subsection{A lack of synchronizing several devices on the same bus}
 As long as reading manual of PreSonus/Focusrite/PrismSound for BeBoB based devices, there is a way to synchronize devices on the same bus.
@@ -1195,6 +1249,8 @@ TA Document 2001007, AV/C Music Subunit 1.0, April 8, 2001
 TA Document 1999025, AV/C Descriptor Mechanism Specification Version 1.0, July 23, 2001
 \bibitem{avc-info-block-1}
 TA Document 1999045, AV/C Information Block Types Specification Version 1.0, July 23, 2001
+\bibitem{avc-general-enhancement}
+TA Document 2000004, Enhancements to the AV/C General Specification 3.0 Version 1.1, Oct 24, 2000
 \bibitem{avc-stream-format-1}
 AV/C Stream Format Information Specification V1.0
 \bibitem{avc-stream-format-1-1}
