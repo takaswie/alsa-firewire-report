@@ -15,7 +15,7 @@ Many sound devices for IEEE 1394 bus have been produced since 2000. For the devi
 
 \section{Acknowledgement}
 
-There're many persons to whom I should thank, but here I describe two developers. Clemens Ladisch is a maintainer of ALSA Firewire stack. Without his work for ALSA firewire stack and his mockup for Fireworks driver, I might have no interests for this category of devices and might be a developer for USB sound device. Daniel Wagner is a founder of former FreeBoB project. Without his help, I cannot access to BeBoB related resources and have no opportunity to understand BeBoB behaviours. 
+There're many persons to whom I should thank, but here I describe two developers and three dedicated testers. Clemens Ladisch is a maintainer of ALSA Firewire stack. Without his work for ALSA firewire stack and his mockup for Fireworks driver, I might have no interests for this category of devices and might be a developer for USB sound device. Daniel Wagner is a founder of former FreeBoB project. Without his help, I cannot access to BeBoB related resources and have no opportunity to understand BeBoB behaviours. Darren Anderson, Maximilian Engelhardt and David Henningsson had been patiently tested my drivers with their models. Without their continuous communication, I might not have a confidence of quality of my drivers.
 
 
 \section{Introduction}
@@ -918,7 +918,7 @@ Let's see the detail to generate AMDTP outgoing packets in Figure \ref{fig:packe
 	\label{fig:packetization-out}
 \end{figure}
 
-As of 2013, AMDTP functionality uses 48 queues \footnote{QUEUE\_LENGTH in sound/firewire/amdtp.c} and 16 packets for interrupt interval \footnote{INTERRUPT\_INTERVAL in sound/firewire/amdtp.c}. So hardware interrupts nominally occur every 2 millisecond but this really depends on bandwidth for asynchronous communication. See Figure \ref{cycle-start}. Roughly, it takes 6 millisecond to transmit a first packet since staring isochronous context \footnote{In IEEE 1394, 8,000 packets are surely transferred in a second}.
+As of 2013, AMDTP functionality uses 48 queues \footnote{QUEUE\_LENGTH in sound/firewire/amdtp.c} and 16 packets for interrupt interval \footnote{INTERRUPT\_INTERVAL in sound/firewire/amdtp.c}. So hardware interrupts nominally occur every 2 millisecond but this really depends on bandwidth for asynchronous communication. See Figure \ref{cycle-start}. Roughly, it takes 6 millisecond to transmit a first packet since staring isochronous context \footnote{In IEEE 1394, 8,000 packets are surely transferred per second.}.
 
 There is a case that firewire-lib fails to continue streaming. It's to fail queueing. To check whether a stream is running or not, amdtp\_stream\_running() is used, and amdtp\_streaming\_error() is used to detect error. Once streaming becomes error state, the stream should be stopped by amdtp\_stream\_stop(), then start by amdtp\_stream\_start() again.
 
