@@ -20,9 +20,9 @@ There're many persons to whom I should thank, but here I describe two developers
 
 \section{Introduction}
 
-Linux is an operating system widely used on various platform. Linux has a sound subsystem, Advanced Linux Sound Architecture ALSA). ALSA is utilized on several platform. On PC/AT-compatible platform, there are peoples who has enthusiasms to use Linux for music production. They require sound devices with unique functionality such like internal mixing and synchronization, and some of them (not all of them) prefer to sound devices for IEEE1394 bus because the devices satisfies their requirement.
+Linux is an operating system widely used on various platform, and its sound subsystem, Advanced Linux Sound Architecture (ALSA) is used on several platform. On PC/AT-compatible platform, there are peoples who has enthusiasms to use Linux for music production. They require sound devices with unique functionality such like internal mixing and synchronization, and some of them (not all of them) prefer to sound devices for IEEE1394 bus because the devices satisfies their requirement.
 
-But ALSA, itself, has a weak stack to handle the devices. Instead of ALSA, user-land driver satisfies the users. A project to develop the driver is FFADO. FFADO gives a library and API to communicate to the devices. Although threre're much ALSA applications, there're less FFADO applications. And there's no way for ALSA applications to use FFADO directly.
+But ALSA, itself, has a weak stack to handle the devices. Instead of ALSA, user-land driver satisfies the users. A project to develop the driver is FFADO. FFADO gives a library and API to communicate to the devices. Although threre're much ALSA applications, there're less FFADO applications. And there's no way for ALSA applications to use FFADO directly. This means that ALSA applications don't use the sound devices directly.
 
 I\footnote{Author} realized this issue in 2009. After investigating, I concluded that enhancement of ALSA firewire stack is a better solution. This report is written to explain the conclusion and my work for this stack.
 
