@@ -895,6 +895,7 @@ FCP functionality internally uses snd\_fw\_transaction(). This is a wrapper func
 This module gives a structure for continuous packet buffer. Drivers initialize an instance of the structure by iso\_packets\_buffer\_init() with the number of packets and the number of bytes in an packet. After initialized, the instance has pages and the pages can be used to queue packets. To releasing the instance, iso\_packets\_buffer\_destroy() is used.
 
 \subsubsection{AMDTP functionality}
+\label{sec:enhancement-amdtp}
 
 This module gives a structure for AMDTP stream and some operations to handle an instance of the structure. This functionality uses the continuous packets buffer functionality internally. Drivers initialize an instance of the structure by amdtp\_stream\_init(). After initializing, amstp\_stream\_set\_parameters() is used to set streaming parameters such as sampling rate, the number of Multi Bit Linear Audio (MBLA) data channel and MIDI Conformant data channel for the stream. After setting parameters, amdtp\_stream\_get\_max\_payload() returns the maximum number of bytes of payload for a packet with current parameters.
 
@@ -918,7 +919,7 @@ Let's see the detail to generate AMDTP outgoing packets in Figure \ref{fig:packe
 	\label{fig:packetization-out}
 \end{figure}
 
-As of 2013, AMDTP functionality uses 48 queues \footnote{QUEUE\_LENGTH in sound/firewire/amdtp.c} and 16 packets for interrupt interval \footnote{INTERRUPT\_INTERVAL in sound/firewire/amdtp.c}. So hardware interrupts nominally occur every 2 millisecond but this really depends on bandwidth for asynchronous communication. See Figure \ref{cycle-start}. Roughly, it takes 6 millisecond to transmit a first packet since staring isochronous context \footnote{In IEEE 1394, 8,000 packets are surely transferred per second.}.
+As of 2013, AMDTP functionality uses 48 queues \footnote{QUEUE\_LENGTH in sound/firewire/amdtp.c} and 16 packets for interrupt interval \footnote{INTERRUPT\_INTERVAL in sound/firewire/amdtp.c}. So hardware interrupts nominally occur every 2 millisecond but this really depends on bandwidth for asynchronous communication. See Figure \ref{cycle-start}. Roughly, it takes 6 millisecond to transmit a first packet since staring isochronous context.
 
 There is a case that firewire-lib fails to continue streaming. It's to fail queueing. To check whether a stream is running or not, amdtp\_stream\_running() is used, and amdtp\_streaming\_error() is used to detect error. Once streaming becomes error state, the stream should be stopped by amdtp\_stream\_stop(), then start by amdtp\_stream\_start() again.
 
@@ -1020,7 +1021,7 @@ As a default, any AMDTP streams are not associated. For duplex streams with time
 \end{figure}
 
 
-This work newly adds a support of MIDI substream to AMDTP stream. During streaming, each drivers can trigger MIDI messages with amdtp\_stream\_midi\_trigger(). Some models ignore MIDI messages in more than 8 data blocks in an packet. This may be due to a gap of data rate between MIDI bus and IEEE 1394 bus. To handle this quirk, struct amdtp\_stream.rx\_blocks\_for\_midi is used.
+In IEC 61883-6 \cite{iec61883-6-1, iec61883-6-2} and MMA/AMEI RP-027 \cite{amei-rp27}, one MIDI Conformant data channel supports 8 MIDI substreams. This work newly adds a support of this multiplexed MIDI substream in AMDTP stream. During streaming, each drivers can trigger MIDI messages with amdtp\_stream\_midi\_trigger(). Some models ignore MIDI messages in more than 8 data blocks in an packet. This may be due to a gap of data rate between MIDI bus and IEEE 1394 bus. To handle this quirk, struct amdtp\_stream.rx\_blocks\_for\_midi is used.
 
 For PCM component, this work newly adds amdtp\_stream\_add\_hw\_constraints() to add PCM constraint according to parameters of AMDTP stream. This function should be called after all of needed flags are set to an instance of AMDTP stream structure.
 
@@ -1044,25 +1045,52 @@ Additionally, this work adds three AV/C commands, which seems to be used in some
 
 These new functionalities help to develop new drivers. Furthermore, existed drivers can be updated for both PCM/MIDI playback/capture.
 
-\subsection{Common functionality}
+\subsection{PCM functionality}
 
-PCM functionality of each driver has SND\_PCM\_INFO\_BATCH flag because the driver uses a part of packet queues for each PCM period. PCM functionality also has SND\_PCM\_INFO\_BLOCK\_TRANSFER flag because PCM frames are transferred at each interrupt by the number of data blocks in some packets \footnote{QUEUE\_LENGTH in /sound/firewire/amdtp.c}. PCM samples are copied to each data blocks in its order and the position of PCM samples in a data block is linear, so SNDRV\_PCM\_INFO\_INTERLEAVED should be used. If devices supports both streams, in most case, incoming/outgoing AMDTP streams should be the same sampling rate, so SNDRV\_PCM\_INFO\_JOINT\_DUPLEX should be used. Each drivers should restrict sampling rate for both playback/capture as the same. If current source of clock is not internal or recovered clock (section \ref{sec:clock-recovery} to page \pageref{sec:clock-recovery}), the sampling rate should not be changed.
+PCM functionality of each driver has SND\_PCM\_INFO\_BATCH flag because the driver updates hw\_ptr (section \ref{sec:alsa-pcm} to page \pageref{sec:alsa-pcm}) for each PCM period. The timing to elapse PCM period depends on OHCI 1394 hardware interrupt (section \ref{sec:enhancement-amdtp} to page \pageref{sec:enhancement-amdtp}). PCM functionality also has SND\_PCM\_INFO\_BLOCK\_TRANSFER flag because PCM frames are transferred at each interrupt by the number of data blocks in some packets \footnote{QUEUE\_LENGTH in /sound/firewire/amdtp.c}.
 
-MIDI functionality is supported. Most devices have a pair of input/output port but a few devices have several ports.
+PCM frames are copied to each data blocks in its order and the position of PCM frames in a data block is linear, so SNDRV\_PCM\_INFO\_INTERLEAVED should be used. If devices supports both streams, in most case, incoming/outgoing AMDTP streams should be the same sampling rate, so SNDRV\_PCM\_INFO\_JOINT\_DUPLEX should be used. Each drivers should restrict sampling rate for both playback/capture as the same. If current source of clock is not internal or recovered clock (section \ref{sec:clock-recovery} to page \pageref{sec:clock-recovery}), the sampling rate should not be changed.
 
-Hwdep functionality is used to the same purpose as Dice driver uses. Additionally some drivers implement its own operation into hwdep interface.
+Currently, SNDRV\_PCM\_HW\_PARAMS\_NO\_PERIOD\_WAKEUP is not supported because these drivers have a possibility to stop streaming suddenly due to failure of packet queueing or detection of packet discontinuity. In this case, process with the flag is kept blocking.
 
-To help debug, the drivers add proc nodes under the card's firewire subdirectory. When reporting bugs, users should also reports output from these nodes.
+\subsection{MIDI functionality}
 
+MIDI functionality is supported. Most devices have a pair of input/output port but a few devices have several ports. Anyway, these devices need one MIDI Conformant data channel in each data block.
+
+\subsection{Hwdep functionality}
+Hwdep functionality is used to the same purpose as Dice driver uses. ALSA applications can execute I/Os to this interface and the API is in include/uapi/sound/firewire.h. The requests are:
+
+\begin{description}
+\item [SNDRV\_FIREWIRE\_IOCTL\_GET\_INFO] \mbox{} \\
+This request returns data of struct snd\_firewire\_get\_info. This information tells the type of driver, firewire card index, GUID for the device and name of fw character device like "fw1,0".
+\item [SNDRV\_FIREWIRE\_IOCTL\_LOCK] \mbox{} \\
+This request locks the driver's functionality of streaming for user-land driver.
+\item [SNDRV\_FIREWIRE\_IOCTL\_UNLOCK] \mbox{} \\
+This request unlocks the driver's functionality of streaming for user-land driver.
+\end{description}
+
+Furthermore, ALSA applicatons can receive notifications by reading hwdep interface. The notification is a form of union snd\_firewire\_event. Each kind of this union has "type" member in its first field and tells the type of event to ALSA applications. The event to starting/stopping streaming by drivers are commonly implemented and the other events depend on each driver.
+
+\subsection{Control functionality}
 For most devices, the drivers has no control functionality. The usage of this functionality is to control device's DSP behaviour (section \ref{sec:internal-mixing} to page \pageref{sec:internal-mixing}). But this can be achieved by user-land implementation. For this purpose, currently, ffado-dbus-server/ffado-mixer are one of recommendations.
+
+\subsection{Proc node}
+
+To help debug, the drivers add proc nodes under the card's "firewire" subdirectory. When reporting bugs, users should also reports output from these nodes. These nodes should not be used fot the other purposes.
 
 
 \subsection{Fireworks driver}
 
-Fireworks driver locates in sound/firewire/fireworks/ and consists of 9 files. When initializing, the module register a handler into a certain address to receive responses of Fireworks transaction. The structure of Fireworks transaction is in include/uapi/sound/firewire.h.
+Fireworks driver locates in sound/firewire/fireworks/ and consists of 9 files. When initializing, the module register a handler into a certain address on host controller to receive responses of Fireworks transaction. Fireworks has a command to change the address, but the driver don't use this command and use the default address. The address space on host controller is exclusive resource and the reason to use the default address is to save spaces. The structure of Fireworks transaction is in include/uapi/sound/firewire.h.
 
 \begin{verbatim}
-#define SND_EFW_TRANSACTION_USER_SEQNUM_MAX	((__u32)((__u16)~0) - 1)
+#define SNDRV_FIREWIRE_EVENT_EFW_RESPONSE       0x4e617475
+struct snd_firewire_event_efw_response {
+        unsigned int type;
+        __be32 response[0];     /* some responses */
+};
+
+#define SND_EFW_TRANSACTION_USER_SEQNUM_MAX     ((__u32)((__u16)~0) - 1)
 /* each field should be in big endian */
 struct snd_efw_transaction {
         __be32 length;
@@ -1075,19 +1103,42 @@ struct snd_efw_transaction {
 };
 \end{verbatim}
 
-ALSA applications can transmit request by writing hwdep interface. Each instance of fireworks driver has a queue to store the responses and ALSA applications can read them via hwdep interface, too. There is a rule for request that ALSA applications must use the correct value for 'seqnum' member between 0 to SND\_EFW\_TRANSACTION\_USER\_SEQNUM\_MAX because value of out of the range is used by the driver itself. The driver doesn't implement whole fireworks commands, implements needed commands to maintain streams or help debug.
+ALSA applications can transmit request by writing hwdep interface. Each instance of fireworks driver has a queue to store the responses and ALSA applications can read them via hwdep interface, too. There is a rule for request that ALSA applications must use the correct value for 'seqnum' member between 0 to SND\_EFW\_TRANSACTION\_USER\_SEQNUM\_MAX because value of out of the range is used by the driver itself. I note that the driver doesn't implement whole fireworks commands, implements needed commands to maintain streams or help debug.
 
-To support much quirks of AMDTP packets, the driver apply several flags to amdtp structure, but CMP is normal and separately from each direction. 
+Fireworks has two modes to transmit AMDTP packets. In Windows mode, the value of dbc in first CIP header is zero and whole the second CIP header is used to indicate timestamp. Another is IEC 61883 mode but this is not compliant to IEC 61883-1/6. The value of data block counter means the number of data blocks till the end of each packet. Additionally, Fireworks transmits empty packet with tag 0 in IEEE 1394 isochronous packet. Furthermore, Fireworks has some quirks depending on model and its firmware version. To support such quirks, the driver apply several flags to amdtp structure, but CMP is normal and separately from each direction.
+
+Fireworks has a quirk at bus reset, to restart dbc from zero. To handle this quirk, the driver don't check packet continuity when dbc is zero.
 
 \subsection{BeBoB driver}
 
-BeBoB driver locates in sound/firewire/bebob/ and consists of 12 files. To handle vendor specific operation, the driver has several files for each vendor. Especially, M-Audio largely customized and two models \footnote{Firewire 1814 and ProjectMix I/O} have many specific operations. These devices also has write-only controls. Because of these controls, the driver adds Control interface.
+BeBoB driver locates in sound/firewire/bebob/ and consists of 12 files. To handle vendor specific operation, the driver has several files for each vendor. Especially, M-Audio largely customized and two models \footnote{Firewire 1814 and ProjectMix I/O} have many specific operations. These devices also has write-only controls. Because of these controls, the driver adds ALSA Control interface, as only an exception.
 
 BeBoB has a quirk at bus reset. It transmits packets with disorder just after bus reset. To recover from this discontinuity, the driver uses Linux completion and serialize PCM component .prepare() call and firewire subsystem .update() call.
 
 \subsection{Dice driver}
 
+Dice driver may be moved to sound/firewire/dice/ and split to 9 files. Originally, the driver supports PCM playback but may be extended to PCM/MIDI playback and capture.
+
+Dice has its own mechanism to notify status change, so the driver gives a way to read the notification via hwdep interface. It's implemented as a type of event I described.
+
+\begin{verbatim}
+#define SNDRV_FIREWIRE_EVENT_DICE_NOTIFICATION   0xd1ce004e
+struct snd_firewire_event_dice_notification {
+        unsigned int type;
+        unsigned int notification; /* DICE-specific bits */
+};
+\end{verbatim}
+
+ALSA applications read the event and parse it to know current status.
+
+Dice has a quirk at bus reset not to react any transactions for reconnection. In this reason, the driver stops any streams at bus reset.
+
+
 \subsection{OXFW driver}
+
+OXFW driver may be newly added as a successor of firewire-speakers driver. The driver may be move to sound/firewire/oxfw/ and split to 9 files. Originally, firewire-speakers driver supports PCM playback and two models but OXFW driver may support PCM/MIDI playback and capture, and more models.
+
+The firewire-speakers driver supports ALSA control interface for two models, so OXFW driver may still support this interface for them. But for the other devices, OXFW driver may not give this interface. Ideally, this functionality should be move to user-land.
 
 
 \section{Rest of issue}
@@ -1159,15 +1210,15 @@ When generating bus reset with ffado-test or jujuutils\footnote{https://code.goo
 This case depends on which devices are connected or removed. If they're Fireworks/BeBoB based devices, streaming sometimes continues and sometimes stops. If they're not Fireworks/BeBoB based device, streaming continues. I don't know the reason exactly but I guess the synchronizing mechanism I describe have some relations. 
 \end{description}
 
-\subsection{A lack of Control interface}
+\subsection{A lack of ALSA control interface}
 
-To reduce maintaining effort and source code base, ALSA firewire stack and firewire drivers basically have no Control interface. But the sound devices needs software implementation to control DSP behaviour (section \ref{sec:internal-mixing} to page \pageref{sec:internal-mixing}).
+To reduce maintaining effort and source code base, ALSA firewire stack and firewire drivers basically have no ALSA control interface. But the sound devices needs software implementation to control DSP behaviour (section \ref{sec:internal-mixing} to page \pageref{sec:internal-mixing}).
 
 Currently, ffado-dbus-server/ffado-mixer is one of recommendation for this purpose but these implementations are isolated from ALSA applications.
 
-Like ALSA PCM interface, ALSA Control interface has External Control plugins in alsa-lib. So it may be possible to give ways to control DSP for ALSA applications.
+Like ALSA PCM interface, ALSA Control interface has External Control plugins. So it may be possible to give ways to control DSP for ALSA applications.
 
-But there is an issue that a few devices have write-only control so there is a need to prepare for permanent storage.
+But there is an issue that a few devices have write-only controls so there is a need of permanent storage. Current ALSA control interface has no mechanism for the storage.
 
 
 \subsection{A lack of synchronizing several devices on the same bus}
@@ -1189,6 +1240,8 @@ Currently ALSA Firewire stack doesn't support this mechanism. The reason is a ba
 \end{itemize}
 
 Instead of this type of synchronization, ALSA Firewire stack handle packets from a device and read SYT, then transfer packets with the value to the device.
+
+\newpage
 
 \begin{thebibliography}{99}
 
