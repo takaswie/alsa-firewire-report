@@ -412,8 +412,8 @@ Most devices for production have several options for source of clock. The source
 \begin{itemize}
 	\item Signal from internal clock source
 	\item Signal from input of S/PDIF, ADAT or Word Clock
-	\item Signal with nominal isochronous cycle (8kHz)
-	\item Signal with recovered clock as described in previous subsection (4.0/5.512/6.0kHz)
+	\item Signal of nominal isochronous cycle (8kHz)
+	\item Signal of recovered clock as described in previous subsection (4.0/5.512/6.0kHz)
 \end{itemize}
 
 The way to change or check current source of clock depends on each chipset or mode. When an external source is selected, sampling rate should be fixed according to the signal from an external source.
@@ -433,9 +433,9 @@ As described in former subsection, each AMDTP packet delivers 'presentation time
 
 \subsection{Different formation of data channel in a data block of packet}
 
-In IEC 61883-6\cite{iec61883-6-1, iec61883-6-2}, an event is represented as a data block. The data block can include several types of data in each data channel. For example, Multi Bit Linear Audio (MBLA) data channel for PCM samples, MIDI Conformant data channel for MIDI messages and IEC 60958 Conformant data channel for PCM samples. Each model has its own formation and the number of data channels, depending on sampling frequency or a certain modes, even if these models use the same chipset.
+In IEC 61883-6\cite{iec61883-6-1, iec61883-6-2}, a data block represents an event. The data block can include several types of data in each data channel. For example, Multi Bit Linear Audio (MBLA) data channel for PCM samples, MIDI Conformant data channel for MIDI messages and IEC 60958 Conformant data channel for PCM samples. Each model has different number of data channel and its own formation, depending on sampling frequency or a certain modes, even if these models use the same chipset.
 
-The way to retrieve information about the formation depends on each chipset.
+The way to get information about the formation depends on each chipset.
 
 \subsection{Chipset specific operations and quirks}
 
@@ -444,9 +444,9 @@ Although there are some common specifications, each device has specific quirks d
 \subsubsection{Fireworks}
 Fireworks is a board module which Echo Audio produced. This module consists of three chipsets: Communication chipset for IEEE1394 PHY/Link and IEC 61883-1/6 (Texas Instruments iceLynx Micro), DSP or/and FPGA for signal processing, Flash Memory to store firmwares.
 
-Fireworks uses its own mechanism for transaction. Drivers transmit commands to a specific address on device, and the device transmit responses to a specific address on controller. Fireworks, therefore, has unique command sets. Although this transaction is transferred to specific addresses, there's another way to transfer commands and responses as AV/C vendor specific commands.
+Fireworks uses both of AV/C commands and its own mechanism for transaction. Fireworks supports some commands in AV/C general\cite{avc-general-4-2}, AV/C Descriptor mechanism\cite{avc-general-enhancement}. Drivers can also transfer commands to a specific address on a device, and the device transfers responses to a specific address on the controller. Fireworks, therefore, has unique command sets in its own mechanism for transaction. This transaction is transferred to specific addresses, while there's another way to transfer commands and responses as AV/C vendor specific commands.
 
-Fireworks manages streams by CMP and transfers AMDTP packets in blocking mode. But Fireworks streams are not fully compliant to IEC 61883-1. In IEC 61883-1, the value of data block counter means the number of packets which has already transferred. But in Fireworks, it means the number of data blocks which has transferred including current packet. Furthermore, its empty packets are transferred at tag b00 in isochronous packet. Additionally, Fireworks has more quirks depending on firmware version for iceLynx Micro.
+Fireworks manages streams by CMP and transfers AMDTP packets in blocking mode. The streams are not fully compliant to IEC 61883-1. In IEC 61883-1, the value of data block counter means the number of packets which has already transferred, while in Fireworks it means the number of data blocks including current packet. Furthermore, its empty packets are transferred at tag b00 in isochronous packet header. Additionally, Fireworks has more quirks depending on firmware version for iceLynx Micro.
 
 
 \subsubsection{BeBoB}
@@ -454,22 +454,22 @@ BeBoB is 'BridgeCo enhanced Breakout Box'. This is installed to firewire devices
 
 BeBoB uses CMP to maintain AMDTP streams but some BeBoB based devices need both connections to transmit AMDTP stream. BeBoB transfers AMDTP packets in blocking mode.
 
-BeBoB supports AV/C General command\cite{avc-general-4-2}, AV/C Audio Subunit command\cite{avc-audio-1}, AV/C Music Subunit command\cite{avc-music-1} and AV/C Descriptor Mechanism\cite{avc-general-enhancement}. Furthermore, BeBoB uses its own extension of AV/C commands\cite{bebob-1, bebob-2}. But BeBoB can be customized largely, therefore there're some model specific operations. The models sometimes use no AV/C commands the AV/C commands.
+BeBoB supports AV/C General command\cite{avc-general-4-2}, AV/C Audio Subunit command\cite{avc-audio-1}, AV/C Music Subunit command\cite{avc-music-1} and AV/C Descriptor Mechanism\cite{avc-general-enhancement}. Furthermore, BeBoB uses its own extension of AV/C commands\cite{bebob-1, bebob-2}. But BeBoB can be customized largely, therefore there're some model specific operations. Some models use no AV/C commands.
 
 
 \subsubsection{OXFW970/971}
 OXFW970/971 was produced by Oxford Semiconductor.
 
-OXFW970/971 uses CMP to maintain AMDTP streams and transfers AMDTP packet in non-blocking mode.
+OXFW970/971 use CMP to maintain AMDTP streams and transfer AMDTP packets in non-blocking mode.
 
 OXFW970/971 support AV/C general command\cite{avc-general-4-2} and AV/C Audio subunit command\cite{avc-audio-1}.
 
 \subsubsection{Dice}
-Dice is Digital Interface Communications Engine which TC Applied Technologies produces.
+Dice is Digital Interface Communications Engine, which TC Applied Technologies produces.
 
 Dice doesn't use CMP or any AV/C commands, although uses read/write transactions to specific register for this purpose. Dice has unique mechanism to notify status change. This notification is delivered to a specific address on controller and drivers can indicate the address.
 
-Dice transfers AMDTP packets in blocking mode. But Dice is not fully compliant to IEC 61883-6. At higher sampling rate, Dice transfers AMDTP packets with double count of data blocks at a half of rate than IEC 61883-6. For example, in IEC 61883-6, at 192.0kHz in blocking mode, an AMDTP packet includes 32 data blocks. But Dice transfers AMDTP packets with 64 data blocks at 96.0kHz. This is called as 'dual wire'.
+Dice transfers AMDTP packets in blocking mode. But Dice is not fully compliant to IEC 61883-6. At higher sampling rate, Dice transfers AMDTP packets with double count of data blocks at a half of rate than IEC 61883-6. For example, in IEC 61883-6, at 192.0kHz in blocking mode, an AMDTP packet includes 32 data blocks but it includes 64 data blocks at 96.0kHz in Dice. This is called as 'dual wire'.
 
 
 \section{Existing drivers}
@@ -477,11 +477,11 @@ Dice transfers AMDTP packets in blocking mode. But Dice is not fully compliant t
 In previous section, I describe device features and chipset quirks. In this section, let's see current implementation for them.
 
 \subsection{FFADO}
-FFADO is a project to develop user-land drivers for firewire sound devices. FreeBoB is a ancestral project of FFADO and Daniel Wagner started this project to develop driver for BridgeCo Enhanced Breakout Box (BeBoB) based devices in 2004. Daniel was in BridgeCo AG and had a contract to disclose relevant resources to the other developers. Later, Peter Palmer joined, The code base of FFADO grew up by them. In 2006, Jonathan Woithe joined in this project. He worked for drivers for MOTU devices. In 2007, to support more devices, FFADO project began.
+FFADO is a project to develop user-land drivers for firewire sound devicesfootnote{http://ffado.org/}. FreeBoB is a ancestral project of FFADO and Daniel Wagner started this project for BeBoB driver in 2004. Daniel was in BridgeCo AG and had a contract to disclose relevant resources to the other developers. Later, Peter Palmer joined. The code base of FreeBoB grew up by them. In 2006, Jonathan Woithe joined in this project. He worked for drivers for MOTU devices. In 2007, to support more devices, FFADO project began.
 
 As of 2014, FFADO supports:
 \begin{itemize}
-\item DM1000/1100/DM1500 based devices with BeBoB
+\item DM1000/DM1100/DM1500 based devices with BeBoB
 \item Echo Audio Fireworks based devices
 \item Oxford Semiconductor OXFW970/971 based devices
 \item Stanton SC System 1 (PCM only)
@@ -490,11 +490,11 @@ As of 2014, FFADO supports:
 \item Some devices which RME produces
 \end{itemize}
 
-FFADO gives a library, libffado. This library uses 'libraw1394' to execute I/Os to Linux Firewire stack, and use 'libiec61883' to packetize and manage connections. This library also handles model specific operations and AV/C commands including vendor dependent commands. FFADO applications can transfer packets from/to devices, and control the devices.
+FFADO gives a library, 'libffado'. This library uses 'libraw1394' to execute I/Os to Linux Firewire stack, and use 'libiec61883' for CMP and AMDTP. This library also handles model specific operations and AV/C commands including vendor dependent commands. FFADO applications can transfer AMDTP packets from/to devices, and control the devices.
 
-FFADO also gives a daemon, 'ffado-dbus-server' as a FFADO application. As the name shows, this daemon uses D-Bus interfaces to give a way for the other applications to control device's internal mixer. Currently there're no applications to use this interface than ffado-mixer, which gives GUI with Qt4.
+FFADO also gives a daemon, 'ffado-dbus-server' as a FFADO application. As the name shows, this daemon uses D-Bus interfaces so that the other applications to control device's internal mixer. Currently there're no applications to use this interface except for 'ffado-mixer', which gives GUI with Qt4.
 
-Currently, there are no FFADO applications except for 'ffado-dbus-server' and JACK \footnote{http://jackaudio.org/} server daemon (jackd). The jackd uses libffado to packetize and transfer packets to/from devices. The jackd uses UNIX domain socket and System V Shared Memory to gather/distribute data to/from JACK application processes. 
+Currently, there is no FFADO application except for 'ffado-dbus-server' and JACK \footnote{http://jackaudio.org/} server daemon (jackd). The jackd uses libffado to transfer AMDTP packets to/from devices. The jackd uses UNIX domain socket and System V Shared Memory to gather/distribute data to/from JACK application processes. 
 
 \begin{figure}[H]
 	\centering
@@ -503,48 +503,49 @@ Currently, there are no FFADO applications except for 'ffado-dbus-server' and JA
 	\label{ffado_apps}
 \end{figure}
 
+
 \subsection{ALSA Firewire stack}
 There're no actions till 2010 to support firewire sound devices. An ALSA developer, Clemens Ladisch, started his work for ALSA firewire stack in 2010. In 2011, some stuffs were merged to ALSA upstream. This is a beginning of ALSA Firewire stack. In this time, 'snd-firewire-speakers' was committed for two models of OXFW970/971 based devices. In 2012, 'snd-scs1x' was committed as MIDI only driver for Stanton SC System 1\footnote{This model has its own way to transmit/receive MIDI messages.}. In 2013, 'snd-dice' was committed as playback only driver for Dice based devices.
 
-As of 2013, ALSA firewire stack generally supports PCM playback only, while FFADO supports more functionality. If there're some ways for ALSA applications to use FFADO, or there're some ways in user-land for ALSA applications to access the sound devices, it doesn't matter that ALSA firewire stack is cheap. In next section, I investigate ALSA implementation in user-land to seek a solution for this issue.
+As of 2013, ALSA firewire stack generally supports PCM playback only, while FFADO supports more functionality. If there're some ways for ALSA applications to use FFADO, or to access the sound devices with user-land implementation, it doesn't matter that ALSA firewire stack is weak. In next section, I investigate ALSA implementation in user-land to seek a solution for this issue.
 
 
 \section{Investigation for user-land driver}
 
-In IEC 61883-6\cite{iec61883-6-1,iec61883-6-2}, a packet can include several types of data, such like PCM samples and MIDI messages. Additionally, 'presentation time' processing needs a stream from a timestamp generator. In these reasons, when several ALSA applications run for playback and capture PCM samples/MIDI messages, these applications require Interprocess Communication (IPC) between packetization process and application processes.
+In IEC 61883-6\cite{iec61883-6-1,iec61883-6-2}, a packet can include several types of data, such like PCM samples and MIDI messages. Additionally, for 'presentation time', incoming/outgoing streams must be handled to pass the value of SYT field. In these reasons, when several ALSA applications run for playback and capture PCM samples/MIDI messages, these applications require Interprocess Communication (IPC) between packetization process and application processes.
 
-There're a few possibilities to implement the requirement in user-land implementation of ALSA. They're ALSA PCM plugins, ALSA External PCM plugins and CUSE application. In this section, at first, I describe ALSA implementation in user-land. Next, I investigate the three possibilities.
+There're a few possibilities to implement the requirement in user-land. They're ALSA PCM plugins, ALSA External PCM plugins and CUSE application. In this section, at first, I describe ALSA implementation in user-land. Next, I investigate the three possibilities.
 
 \subsection{ALSA implementation in user-land}
 
-Modern CPUs have several modes to restrict software's access to hardware resources. In Linux, two modes are used. One is user-mode and another is kernel-mode. In user-mode, software is forbidden to access to hardware resources. Software executes system-call to switch into kernel-mode and access to hardware resources. After, the process returns to user-mode.
+Modern CPUs have several modes to restrict software's access to system resources. In Linux, two modes are supported. One is user-mode and another is kernel-mode. In user-mode, software is forbidden to access to hardware resources. Software executes system-call to switch into kernel-mode and access to hardware resources, then the process returns to user-mode.
 
-The resources of sound devices are also hardware resources. Therefore ALSA applications should execute system-call to communicate to them. In ALSA, the entry points for system-call is character devices and the system-call is file operation to them. In ALSA, most of file operations are ioctl(2) with unique requests. I think ALSA developers requires more specific operations than simple file operations such like read(2)/write(2).
+The resources of sound devices are also hardware resources, therefore ALSA applications should execute system-call to communicate to them. In ALSA, the entry points for system-call is character devices and the system-call is file operations to them. In ALSA, most of file operations are ioctl(2) with unique requests. I think ALSA developers requires more specific operations than simple file operations such like read(2)/write(2).
 
-In this reason, ALSA application developers should always consider the combination of ioctl(2) and its requests to handle sound devices. Therefore, it's natural to use ALSA library to give Application Programing Interface (API) as abstract layer for ALSA specific file operations.
+In this reason, ALSA application developers should always consider the combination of ioctl(2) and its requests to handle sound devices. Thus, it's natural to use Application Programing Interface (API) in ALSA library\footnote{http://git.alsa-project.org/?p=alsa-lib.git} as an abstract layer for ALSA specific file operations.
 
-ALSA library consists of several interfaces. Each interface is for each character device. These character devices are under /dev/snd.
+ALSA library includes several interfaces. Each interface is for each character device. These character devices are under /dev/snd.
 
 \begin{description}
 \item[Mixer/hcontrol/control interface] \mbox{} \\
-interface for control character device (/dev/snd/controlC\%i)
+Interfaces for control character device (/dev/snd/controlC\%i)
 \item[PCM interface] \mbox{} \\
-interface for PCM character device (/dev/snd/pcmC\%iD\%ip\{c,p\})
+An interface for PCM character device (/dev/snd/pcmC\%iD\%ip\{c,p\})
 \item[hwdep interface] \mbox{} \\
-interface for hardware dependent character device (/dev/snd/hwdepC\%iD\%i)
+An interface for hardware dependent character device (/dev/snd/hwdepC\%iD\%i)
 \item[RawMidi interface] \mbox{} \\
-interface for midi character device (/dev/snd/midiC\%iD\%i)
+An interface for midi character device (/dev/snd/midiC\%iD\%i)
 \item[Sequencer interface] \mbox{} \\
-interface to deliver the MIDI-like events between clients/ports via sequencer character device (/dev/snd/seq)
+An interface to deliver the MIDI-like events between clients/ports via sequencer character device (/dev/snd/seq)
 \item[Timer interface] \mbox{} \\
-interface to use internal timers in hardware/software interrupt timer via timer character device (/dev/snd/timer)
+An interface to use hardware/software interrupt timer via timer character device (/dev/snd/timer)
 \end{description}
 
 In this list, the format after 'C' shows the number of card and the format after 'D' shows the number of device.
 
-In this section, I describe PCM interface only. ALSA PCM interface is used to transmit/receive PCM samples between application and device. The unit of transfer is called 'frame'. It means that PCM samples with the same timing, thus the number of PCM samples per frame equals to the number of channels in the PCM substream. Most of functions returns the number of frames, instead of the number of bytes.
+In this section, I describe PCM interface only. ALSA PCM interface is used to transmit/receive PCM samples between application and device. The unit of transfer is called 'frame'. It means that PCM samples with the same timing, thus equals to the number of channels in the PCM substream. Most of functions returns the number of frames, instead of the number of bytes.
 
-The basic design of ALSA PCM interface is based on handle. When starting operations, ALSA application open the handle with PCM nodes. The PCM nodes are added to ALSA runtime by ALSA PCM plugins, to extends functionality and features of PCM node. ALSA runtime configuration has hierarchical relationships between master and slave. ALSA applications access to master, then plugin works and transfer PCM data between master buffer and slave buffer. Finally, data reaches hw PCM plugin and directly communicate to kernel-land drivers. This mechanism allows PCM runtime to have 'plugin-chain' according to its configuration. 
+The basic design of ALSA PCM interface is PCM handle. When starting operations, ALSA application open the handle to one of PCM nodes. The PCM nodes are added to ALSA runtime according to configuration to extends functionality and features of PCM node. ALSA runtime configuration has settings of PCM nodes. In most case, the settings are corresponding to PCM plugins with hierarchical relationships between master and slave. When ALSA applications access to a master PCM node, the plugin works and transfer PCM frames between master buffer and slave buffer, then the frames reaches hw PCM plugin and directly communicate to an kernel-land driver. This mechanism allows PCM runtime to have 'plugin-chain' according to its configuration. 
 
 \begin{figure}[htbp]
 	\centering
@@ -562,8 +563,10 @@ The hw plugin executes file operations to PCM character devices. In most case, i
 	\label{alsa_hw_plugin}
 \end{figure}
 
-When ALSA applications call open API of each ALSA interface, this function read configuration files and parse it for runtime. In ALSA default, /usr/share/alsa/alsa.conf is loaded at first. This file also loads /usr/share/alsa/alsa.conf.d/*, /etc/asound.conf and ~/.asoundrc. As a result, for PCM runtime, several PCM nodes are available, for example, hw, plughw(plug plugin with hw slave), dmix, dsnoop and default.
+When an ALSA application calls PCM open API of PCM interface, this function read runtime configuration files and parse it. In ALSA default, /usr/share/alsa/alsa.conf is loaded at first. This file loads /usr/share/alsa/alsa.conf.d/*, /etc/asound.conf and ~/.asoundrc. As a result, for PCM runtime, several PCM nodes are available. For example, hw, plughw(plug plugin with hw slave), dmix, dsnoop and default, see Figure \ref{pcm-nodes-playback}.
 
+\begin{figure}[htbp]
+\small
 \begin{verbatim}
 $ aplay -L
 default:CARD=PCH
@@ -583,10 +586,12 @@ plughw:CARD=Intel,DEV=0
     HDA Intel, ALC889 Analog
     Hardware device with all software conversions
 \end{verbatim}
-
+\caption{ALSA PCM nodes for playback application}
+\label{pcm-nodes-playback}
+\end{figure}
 
 \subsection{ALSA PCM plugins}
-The dmix/dsnoop is a good example for ALSA PCM plugin which utilize IPC mechanism. The dmix plugin multiplexes PCM samples from several applications and transfer the PCM samples to device.  And the dsnoop plugin delivers PCM samples from device to several applications. The dmix/dsnoop plugins use System V Shared Memory for IPC, System V Semaphore for mutual exclusive. ALSA PCM direct layer gives helper functions to these plugins.
+ALSA library has PCM plugins for several purpose\footnote{src/pcm/ in alsa-lib} and dmix/dsnoop plugins are good samples for IPC mechanism. The dmix plugin multiplexes PCM frames from several applications and transfer the PCM samples to device. The dsnoop plugin delivers PCM frames from device to several applications. The dmix/dsnoop plugins use System V Shared Memory for IPC, System V Semaphore for mutual exclusive. ALSA PCM direct layer gives helper functions to these plugins.
 
 \begin{figure}[htbp]
 	\centering
@@ -596,19 +601,19 @@ The dmix/dsnoop is a good example for ALSA PCM plugin which utilize IPC mechanis
 \end{figure}
 
 
-When applications open dmix/dsnoop PCM node by calling snd\_pcm\_open(), the dmix/dsnoop plugins keep or connect System V Shared Memory and System V Semaphore. Then the shared memory is attached to the virtual memory space of each application process. This shared memory is used to share parameters and status of PCM stream for slave. The slave of dmix/dsnoop plugin is fixed to hw plugin. Additionally, dmix plugin keep one shared memory for multiplexing buffer, too.
+When applications open dmix/dsnoop PCM node by calling snd\_pcm\_open(), the dmix/dsnoop plugins keep or connect System V Shared Memory and System V Semaphore. Then the shared memory is attached to the virtual memory space of each application process. This shared memory is used to share parameters and status of PCM stream for slave. The slave of dmix/dsnoop plugin is fixed to hw plugin. Additionally, the dmix plugin keeps one shared memory for multiplexing buffer, too.
 
-When calling 'snd\_pcm\_writei()/snd\_pcm\_mmap\_commit()', the dmix plugin multiplexes PCM samples in application buffer to PCM samples in shared memory, then write into slave buffer. The PCM samples stored to shared memory and used by the other applications for multiplexing. The shared memory is used as 'cache'. This allows any processes to multiplex PCM samples according to their timing and write the sample to buffer for slave, while these processes don't move a buffer pointer for application at slave (hw) by usual way.
+When calling 'snd\_pcm\_writei()/snd\_pcm\_mmap\_commit()', the dmix plugin multiplexes PCM frames in application buffer and in shared memory, then write into slave buffer. The PCM frames are stored to shared memory and used by the other applications for next multiplexing. The shared memory is used as 'cache'. This allows any processes to multiplex PCM frames according to their timing and write the frames to buffer for slave, while these processes don't move a buffer pointer for application at slave (hw) by usual way.
 
-The dsnoop PCM plugin is simpler than dmix PCM plugin because there's no need to multiplex PCM samples.
+The dsnoop PCM plugin is simpler than dmix PCM plugin because there's no need to multiplex PCM samples. Each application read PCM frames from shared memory.
 
-There's two problems of ALSA PCM plugins for my purpose. The framework for ALSA PCM plugins don't allow master without slave. The basic idea of ALSA PCM plugins is to add features hw PCM node. This node is for communication to drivers in kernel-land. This is against my purpose in this section. Additionally, there's an issue that one of processes must do packetization. If an ALSA application perform this role, the application cannot stop as long as the other applications use the PCM node. Therefore, I realized that a daemon process is required to packetize for ALSA applications.
+There's two problems of ALSA PCM plugins for my purpose. The framework for ALSA PCM plugins don't allow master without slave. The basic idea of ALSA PCM plugins is to add features hw PCM node. This node is for communication to drivers in kernel-land, therefore this is against my purpose in this section. Additionally, there's an issue that one of processes must handle packets. If an ALSA application perform this role, the application cannot stop as long as the other applications use PCM nodes for a firewire device. A daemon process, therefore, is required to handle packets for ALSA applications.
 
 
 \subsection{ALSA External PCM plugins}
-ALSA has another way to extend PCM nodes in runtime. It's External PCM Plugin. There're two usages of this, Filter type and I/O type.
+ALSA has another way to extend PCM nodes in runtime. It's External PCM Plugin\cite{alsa-lib}. There are two usages of this; Filter type and I/O type.
 
-The filter type plugin is similar to PCM plugins with master/slave, while I/O type plugin works as the input or output terminal point. I/O type, therefore, is good for my purpose. A good example of I/O type plugin is pulse PCM External plugin for PulseAudio.
+The filter type plugin is similar to PCM plugins with master/slave, while I/O type plugin needs no slave. The I/O type, therefore, is good for my purpose. A good example of I/O type plugin is pulse PCM External plugin\footnote{pulse/ in alsa-plugins} for PulseAudio.
 
 PulseAudio\footnote{http://www.pulseaudio.org} is a project for sound server daemon. In modern desktop environment, PulseAudio adds ALSA runtime configuration\footnote{/usr/share/alsa/pulse-alsa.conf} to overwrite a default PCM node as pulse PCM node. As a result, most of applications in the desktop environment do IPC to PulseAudio via pulse External PCM plugin, then PulseAudio multiplexes/demultiplexes PCM samples for each ALSA applications. Finally, PulseAudio transfer PCM samples from/to each devices.
 
@@ -630,11 +635,11 @@ There is another example. It's freebob External PCM Plugin for FreeBoB. The sour
 	\label{alsa_freebob}
 \end{figure}
 
-This plugin creates a thread when starting. This thread polls with libfreebob wait function, and transfers PCM samples/MIDI messages when waking up. There is no mechanism to check avail frames in ALSA PCM buffer. This plugin also has a restriction that just one application can transfer streams. Therefore either playback or capture is available. This plugin seems to be under working and suspended but shows good perspective for possibility of ALSA/FFADO communication for ALSA applications.
+This plugin creates a thread when starting. This thread polls with libfreebob wait function, and transfers PCM samples/MIDI messages when waking up. There is no mechanism to check avail frames in ALSA PCM buffer. This plugin also has a restriction that just one application can transfer streams, therefore either playback or capture is available. This plugin uses ALSA sequencer interface to gather/deliver MIDI messages between the other ALSA applications. This plugin seems to be under working and suspended but shows good perspective for ALSA applications to use FFADO.
 
-The FreeBoB PCM plugin reinforces the requirement of daemon processes to packetize. And in modern desktop environment, PulseAudio is a candidate for such daemon. If PulseAudio has firewire stack, ALSA applications can transfer data between firewire devices via default PCM node. For MIDI functionality, PulseAudio should use ALSA sequencer interface to gather/deliver MIDI message for ALSA applications, as FreeBoB plugin does.
+The FreeBoB PCM plugin reinforces the requirement of daemon processes to packetize. And in modern desktop environment, PulseAudio is a candidate for such daemon. If PulseAudio has firewire stack, ALSA applications can transfer data between firewire devices via default PCM node. For MIDI functionality, PulseAudio should use ALSA sequencer interface as FreeBoB plugin does.
 
-But there's already a similar PCM External I/O plugin. It's jack PCM plugin. This plugin adds jack PCM node to ALSA runtime and make ALSA applications as JACK client. This way requires users to write ALSA configuration but need no other works.
+But there's already a similar PCM External I/O plugin. It's jack PCM plugin for jackd. This plugin adds jack PCM node to ALSA runtime and make ALSA applications as a client for jackd. The jackd can use firewire devices with FFADO backend. This way requires users to write ALSA configuration but need no other works.
 
 \begin{figure}[H]
 	\centering
@@ -643,7 +648,7 @@ But there's already a similar PCM External I/O plugin. It's jack PCM plugin. Thi
 	\label{alsa_jack}
 \end{figure}
 
-But there is an disadvantage of this. When adding the configuration for jack plugin, the node always exists in ALSA PCM runtime even if there're no processes for JACK server daemon. This is not good at transparency for users.
+But there is a disadvantage of this way. When adding the configuration for jack plugin, the jack PCM node always exists in ALSA PCM runtime even if there is no process for jackd. This is not good at transparency for users.
 
 
 \subsection{CUSE - Character device in user-space}
@@ -656,7 +661,7 @@ Linux Filesystem subsystem has CUSE as FUSE extension. CUSE allows to implement 
 	\label{fuse}
 \end{figure}
 
-Open Sound System Proxy Daemon (osspd) is a good example. The osspd is an application of CUSE. When Open Sound System applications access to /dev/\{dsp, adsp, mixer\}, osspd handles these file operations in user-space with CUSE help, then execute IPC between PulseAudio or ALSA.
+Open Sound System Proxy Daemon (osspd) is a good example\footnote{http://sourceforge.net/projects/osspd/}. The osspd is an application of CUSE. When Open Sound System applications access to /dev/\{dsp, adsp, mixer\}, osspd handles these file operations in user-space with CUSE help, then execute IPC between PulseAudio or ALSA.
 
 \begin{figure}[H]
 	\centering
@@ -666,9 +671,9 @@ Open Sound System Proxy Daemon (osspd) is a good example. The osspd is an applic
 \end{figure}
 
 
-This daemon register Open Sound System devices via FUSE library API. Then udev daemon adds Open Sound System character devices (/dev/dsp, /dev/mixer, /dev/adsp) in system according to rules which osspd adds. The daemon opens a pair of socket for IPC between daemon and slave, then creates a new process for the slave. The slave sleeps to wait IPC from the daemon, then do IPC between PulseAudio or ALSA.
+This daemon register Open Sound System devices via FUSE library API. Then udev daemon adds Open Sound System character devices (/dev/dsp, /dev/mixer, /dev/adsp) to system according to rules which osspd adds. The daemon opens a pair of socket for IPC between daemon and slave, then creates a new process for the slave. The slave sleeps to wait IPC from the daemon, then do IPC between PulseAudio or ALSA.
 
-For my purpose, this way is nice because there's no need to touch ALSA user-land implementation or ALSA runtime. But equivalent codes to whole ALSA Core should be implemented in the daemon to handle application's file operations. This needs much works. In this reason, the combination of 'light' ALSA driver in kernel-land and ALSA PCM component in user-land is better instead of implement alternatives of whole ALSA Core in user-land.
+For my purpose, this way is nice because there's no need to touch ALSA user-land implementation or ALSA runtime. But equivalent codes to whole ALSA Core should be implemented in the daemon to handle application's file operations. This needs much works. In this reason, the combination of 'light' ALSA driver in kernel-land and ALSA PCM component in user-land daemon is better instead of implement alternatives of whole ALSA Core in user-land.
 
 \begin{figure}[H]
 	\centering
@@ -679,7 +684,7 @@ For my purpose, this way is nice because there's no need to touch ALSA user-land
 
 When device is connected, the driver registers ALSA character devices except for PCM. The system detects new ALSA devices for firewire sound devices, then run a daemon. The daemon calls FUSE library to add ALSA PCM character device with appropriate major/minor number. Then new PCM device is available in ALSA runtime. This idea can reduce the amount of codes in the daemon but still needs much works to implement PCM component in the daemon.
 
-In this section, I investigate some software implements in user-land to seek better ways for ALSA applications and firewire driver. As a result, I can conclude that the best way is to implement the drivers in PulseAudio, and realize the work is external to ALSA user-land. In the next section, I investigate ALSA kernel-land to seek another way for my purpose.
+In this section, I investigate some software implementations in user-land to seek better ways for ALSA applications and firewire driver. As a result, I can conclude that the best way is to implement the drivers in PulseAudio, and realize the work is external to ALSA user-land. In the next section, I investigate ALSA kernel-land to seek another way.
 
 
 \section{Investigation for kernel-land driver}
