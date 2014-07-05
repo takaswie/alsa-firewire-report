@@ -8,14 +8,15 @@
 \date{2014/06/26}
 \maketitle{}
 
-\section{Abstract}
+\begin{abstract}
 
-Many sound devices for IEEE 1394 bus have been produced since 2000. For the devices, ALSA, Linux Sound Subsystem, has Firewire driver stack in kernel-land. But this stack can support a few devices because it has a restriction to just transfers outgoing packets with PCM samples. This is not enough for most of devices for production because these devices require drivers to handle incoming packets for timestamp synchronization, multiplex/demultiplex different types of data to the same packet. Instead of ALSA, FFADO, a project to develop user-land driver, supports many of the device. But there is no way to bridge ALSA applications and FFADO directly, and ALSA applications cannot communicate to the devices directly. In 2014, ALSA firewire stack is extended to support 70-80 devices with new drivers without disturbing user-land drivers to solve this issue.
+Many sound devices for IEEE 1394 bus have been produced since 2000. For the devices, ALSA, Linux Sound Subsystem, has Firewire driver stack in kernel-land. But this stack can support a few devices because it has a restriction to transfer outgoing packets with PCM samples. This is not enough for most of devices for production because these devices require drivers to handle incoming packets for timestamp synchronization, multiplex/demultiplex different types of data to the same packet. Instead of ALSA, FFADO, a project to develop user-land driver, supports many of the device. But there is no way to bridge ALSA applications and FFADO directly, and ALSA applications cannot communicate to the devices directly. In 2014, ALSA firewire stack is extended to support 70-80 devices with new drivers without disturbing user-land drivers to solve this issue.
 
+\end{abstract}
 
-\section{Acknowledgement}
+\section*{Acknowledgement}
 
-There're many persons to whom I should thank, but here I describe two developers and three dedicated testers. Clemens Ladisch is a maintainer of ALSA Firewire stack. Without his work for ALSA firewire stack and his mockup for Fireworks driver, I might have no interests for this category of devices and might be a developer for USB sound device. Daniel Wagner is a founder of former FreeBoB project. Without his help, I cannot access to BeBoB related resources and have no opportunity to understand BeBoB behaviours. Darren Anderson, Maximilian Engelhardt and David Henningsson had been patiently tested my drivers with their models. Without their continuous communication, I might not have a confidence of quality of my drivers.
+There're many persons to whom I should thank, but here I describe two developers and three dedicated testers. Clemens Ladisch is a maintainer of ALSA Firewire stack. Without his work for ALSA firewire stack and his mockup for Fireworks driver, I might have no interests for this category of device. Without his comments and reviews for my patches, they aren't merged to ALSA upstream. Daniel Wagner is a founder of former FreeBoB project. Without his help, I cannot access to BeBoB related resources and have no opportunity to understand BeBoB behaviours. Darren Anderson, Maximilian Engelhardt and David Henningsson had been patiently tested my drivers with their models. Without their continuous communication, I might have no confidence of quality of my drivers.
 
 
 \section{Introduction}
@@ -189,9 +190,9 @@ IEC 61883 series, itself, came from documents which 1394 Trade Association (1394
 
 \subsection{IEC 61883-6}
 
-IEC 61883-6 is a variation of IEC 61883-1 for audio and music data. The first edition was published in 2002\cite{iec61883-6-1}. The second edition was published in 2005 with many extensions\cite{iec61883-6-2}.
+IEC 61883-6 is a variation of IEC 61883-1 for audio and music data, so-called as AMDTP. The first edition was published in 2002\cite{iec61883-6-1}. The second edition was published in 2005 with many extensions\cite{iec61883-6-2}.
 
-IEC 61883-1\cite{iec61883-1-1, iec61883-1-2, iec61883-1-3} allows any variations for CIP structure. The CIP header consists of some 32bit fields. The first bit in MSB means End-of-CIP-header (EOH). This bit stands when the 32bit fields is the last CIP header. The second bit in MSB is Form. This bit means the format of followed fields but the specification includes ambiguity of its meaning. AMDTP uses two quadlets CIP header with SYT field. I show CIP structure for AMDTP in Figure \ref{fig:amdtp-cip}. Minor fields are with zero.
+IEC 61883-1\cite{iec61883-1-1, iec61883-1-2, iec61883-1-3} allows any variations for CIP structure. The CIP header consists of some 32bit fields. The first bit in MSB means End-of-CIP-header (EOH). This bit stands when the 32bit fields is the last CIP header. The second bit in MSB is Form. This bit means the format of followed fields but the specification includes ambiguity of its meaning. In AMDTP, two quadlets CIP header with SYT field is used. I show CIP structure for AMDTP in Figure \ref{fig:amdtp-cip}. Minor fields are with zero.
 
 \begin{figure}[H]
 \centering
@@ -236,11 +237,11 @@ IEC 61883-1\cite{iec61883-1-1, iec61883-1-2, iec61883-1-3} allows any variations
 \item{SYT:} The offset from isochronous cycle timer. In AMDTP, used to show 'presentation time'. In detail, Section \ref{sec:clock-recovery} to page \pageref{sec:clock-recovery}.
 \end{description}
 
-After CIP headers, some data blocks follows. In AMDTP, one data block represents a event. IEC 61883-6\cite{iec61883-6-1, iec61883-6-2} doesn't define meaning of the event, although the event may be a batch of data accompanied with the same timing. There're some ways to describe the data and AM824 is mostly used.
+After CIP headers, some data blocks follows. In AMDTP, one data block represents a event. IEC 61883-6\cite{iec61883-6-1, iec61883-6-2} doesn't define meaning of the event, although the event may be a batch of data accompanied with the same timing. There're some ways to describe the data, although AM824 is mostly used.
 
 AM824 represents data by 32bit field that has an 8bit label and 24bit data field\cite{iec61883-6-2}. In IEC 61883-6:2002\cite{iec61883-6-1}, AM824 can describe three types of data, IEC 60958 Conformant, Raw Audio and MIDI Conformant. In IEC 61883-6:2005\cite{iec61883-6-2}, Raw Audio is renamed as Multi Bit Linear Audio and some data types are newly supported.
 
-As described before, the event is accompanied with timing because the event is real time data for audio and music. As a result, AMDTP is dominated by sampling frequency. The sampling frequency and the type of event is shown in FDF field of CIP header. The 4bit in MSB is EVT field to show the way to describe the data, and the lower 3bit of 4bit in LSB is SFC to show nominal sampling frequency. The rest 1bit is N-flag. This flag is used to show the mode of rate control. When this flag does not stand, it means clock based rate control, described in Section \ref{sec:clock-recovery} to page\pageref{sec:clock-recovery}. Else, it means command based rate control\cite{iec61883-6-2, avc-rate-control}. For AM824, the value of EVT field is b00. The values of SFC field is shown at Table \ref{tbl:sfc-fdf}. For most of sound devices, N-flag doesn't stand.
+As described before, the event is accompanied with timing because the event is real time data for audio and music. As a result, AMDTP is dominated by sampling frequency. The sampling frequency and the type of event is shown in FDF field of CIP header. The 4bit in the most significant bit is EVT field to show the way to describe the data, and the lower 3bit of 4bit in the least significant bit is SFC to show nominal sampling frequency. The rest 1bit is N-flag. This flag is used to show the mode of rate control. When this flag does not stand, it means clock based rate control, described in Section \ref{sec:clock-recovery} to page\pageref{sec:clock-recovery}. Else, it means command based rate control\cite{iec61883-6-2, avc-rate-control}. For AM824, the value of EVT field is b00. The values of SFC field is shown at Table \ref{tbl:sfc-fdf}. For most of sound devices, N-flag doesn't stand.
 
 \begin{figure}[H]
 \centering
@@ -279,16 +280,16 @@ For detail to transfer the packet, see Section \ref{sec:clock-recovery} to page 
 
 OHCI 1394 is a document for host controller implementation for IEEE 1394 bus. The implementation includes link and transaction layer. OHCI 1394 describes software interface with register, interrupt and Direct Media Access (DMA). For PC/AT-compatible platform, OHCI 1394 is implemented as card devices on PCI/PCI-Express bus.
 
-OHCI 1394 represents both of asynchronous and isochronous communication as context, which includes a list of descriptor. A descriptor includes information for a packet of each communications. The information includes an address for DMA buffer. The data for the buffer is transferred between system and controller device by DMA. After transferring, interrupts are generated according to information in the descriptor. The minimum number of isochronous context is 4 and the maximum is 32, for a direction.
+OHCI 1394 represents both of asynchronous and isochronous communication as context, which includes a list of descriptor. A descriptor includes information for a packet of each communications. The information includes an address for DMA buffer. The data for the buffer is transferred between system and controller device by DMA. After transferring, interrupts are generated according to information in the descriptor. The minimum number of isochronous context is 4 and the maximum is 32, for one direction.
 
 \section{Device features}
 
-The sound devices for production have unique features which usual sound devices don't have. In this section, I describe such features to consider software implementation.
+The sound devices for production have unique features. In this section, I describe such features to consider software implementation.
 
 \subsection{Clock recovery}
 \label{sec:clock-recovery}
 
-Clock recovery is a mechanism to regenerate transmitter's clock cycle in receivers' side.
+Clock recovery is a mechanism for receivers to regenerate transmitter's clock cycle.
 
 In IEEE 1394\cite{ieee1394-2}, isochronous-capable nodes should have 32bit CYCLE\_TIMER register. The low-order 12 bits of the register are a modulo 3,072 counter, which increments once every 24.576MHz (or 40.69 nano second). The next 13 higher-order bits are a count of 8.0kHz (or 125us) cycles, and the highest 7 bits count seconds.
 
@@ -304,9 +305,9 @@ In IEEE 1394\cite{ieee1394-2}, isochronous-capable nodes should have 32bit CYCLE
 \label{cycle_timer}
 \end{figure}
 
-In usual implementation, the register count up according to 24.576MHz clock given by IEEE 1394 Link layer chipset. Furthermore, OHCI 1394 controller devices have some CYCLE\_TIMER registers for each isochronous context.
+In usual implementation, the register count up according to 24.576MHz clock given by IEEE 1394 Link layer chipset.
 
-When the cycle\_offset field rolls over on IEEE 1394 Link layer chipset, cycle master node broadcasts a cycle-start packet after arbitration. A cycle\_time field in this packet includes the value of CYCLE\_TIMER register. After receiving cycle-start packet, transmitters and receivers update their CYCLE\_TIMER register with the value. As a result, the transmitters and receivers can maintain local time reference to cycle master. Then transmitters start arbitration and transmit an isochronous packet with a certain channel and the receivers receive isochronous packet with a favorite channel.
+When the cycle\_offset field rolls over, cycle master node broadcasts a cycle-start packet after arbitration. A cycle\_time field in this packet includes the value of CYCLE\_TIMER register. After receiving cycle-start packet, transmitters and receivers update their CYCLE\_TIMER register with the value. As a result, the transmitters and receivers can maintain local time reference to cycle master. Then transmitters start arbitration and transmit an isochronous packet with a certain channel and the receivers receive isochronous packet with a favorite channel. Actual intervals between the cycle-start packets are different depending on arbitrations of cycle master, see Figure \ref{cycle-start}.
 
 \begin{figure}[htbp]
 \centering
@@ -315,7 +316,7 @@ When the cycle\_offset field rolls over on IEEE 1394 Link layer chipset, cycle m
 \label{cycle-start}
 \end{figure}
 
-IEC 61883-1 defines SYT field in CIP header and IEC 61883-6 uses this field to calculate 'presentation time'. The 'presentation time' represents the timestamp for a certain event in a packet. The transmitter calculates offset from local isochronous cycle reference as the timing of sampling clock, then transfers the value in SYT field of a packet. The receivers calculate 'presentation time' with the value of SYT field in the packet and local isochronous cycle reference.
+IEC 61883-1 defines SYT field in CIP header. In IEC 61883-6, this field is used to calculate 'presentation time'. The 'presentation time' represents the timestamp for a certain event in a packet. The transmitter calculates offset from local isochronous cycle reference as the timing of sampling clock, then transfers the value in SYT field of a packet. The receivers calculate 'presentation time' with the value of SYT field in the packet and local isochronous cycle reference.
 
 One packet has one SYT field in its CIP header, while one packet can include several events. As a result, all of events cannot have 'presentation time'. The interval between events corresponding to 'presentation time' is defined as SYT\_INTERVAL.
 
@@ -335,11 +336,11 @@ One packet has one SYT field in its CIP header, while one packet can include sev
 	\end{tabular}
 \end{table}
 
-If there's a packet without 'presentation time', the value of SYT is 'No Information' code (0xffff). The way to decide which events corresponding to 'presentation time' in a packet is different depending on transferring method.
+If there's a packet which includes no event with 'presentation time', the value of SYT is 'No Information' code (0xffff). It's different to decide the event with 'presentation time', depending on transferring method.
 
-In IEC 61883-6\cite{iec61883-6-1,iec61883-6-2}, there are two methods for transferring packets. They're blocking and non-blocking. The differences between these two methods are transfer delay and the number of events which a packet can includes.
+In IEC 61883-6\cite{iec61883-6-1,iec61883-6-2}, there are two methods for transferring packets; blocking and non-blocking. The differences between these two methods are transfer delay and the number of events which a packet can includes.
 
-In blocking mode, the number of event in an packet is fixed to the value of SYT\_INTERVAL and 'presentation time' is for the first event in a packet. A packet is wait to be transferred until all events in the packet are sampled, then the transfer delay is larger than default value by one packet.
+In blocking mode, the number of event in an packet is fixed to the value of SYT\_INTERVAL, and 'presentation time' is for the first event in a packet. A transmitter must wait untill all of samples in a packet are sampled, therefore the transfer delay is larger than default value by one packet.
 
 \begin{figure}[H]
 	\centering
@@ -348,7 +349,7 @@ In blocking mode, the number of event in an packet is fixed to the value of SYT\
 	\label{amdtp-blocking}
 \end{figure}
 
-In non-blocking mode, a different way is used because a packet includes different numbers of events. The transmitter can transfer packets according to nominal isochronous cycle without waiting for completion of events. The transfer delay equals to default value and is less than the value in blocking mode. But it's more complicated to decide which event is accompanying 'presentation timestamp' in a packet.
+In non-blocking mode, a packet can include different numbers of events. The transmitter can transfer packets according to nominal isochronous cycle without waiting for fixed numbers of event. The transfer delay equals to default value. But it's more complicated to decide which event is accompanied by 'presentation timestamp' in a packet.
 
 \begin{figure}[H]
 	\centering
@@ -357,21 +358,19 @@ In non-blocking mode, a different way is used because a packet includes differen
 	\label{amdtp-nonblockingstart}
 \end{figure}
 
-A transmitter decide an event corresponding to 'presentation time' in this condition:
+A transmitter decides an event accompanied by 'presentation time' in this condition:
 
 \begin{equation}
 	mod(DBC, SYT\_INTERVAL) = 0
 \end{equation}
 
-Then receivers calculates the index of events in a packet according to this formula:
+Then receivers calculates an index for the event according to this formula:
 
 \begin{equation}
 	index = mod((SYT\_INTERVAL - mod(DBC, SYT\_INTERVAL)), SYT\_INTERVAL)
 \end{equation}
 
-This is a mechanism of 'presentation timestamp'.
-
-The receivers can generate 'synchronization clock frequency' to use local time reference maintained by cycle\_start packet in each isochronous cycle and the value of SYT field in a packet, according to this formula.
+This is a mechanism of 'presentation time'. The receivers can generate 'synchronization clock frequency' to use the sequence of SYT field and the local time reference maintained by cycle\_start packet in each isochronous cycle, according to this formula.
 
 \begin{equation}
 	Fsync = STF / SYT\_INTERVAL < 8,000
@@ -395,13 +394,13 @@ Here Fsync is the synchronization clock frequency. STF is the sampling transmiss
 	\end{tabular}
 \end{table}
 
-The receivers can use this pulse for PLL reference. This is a mechanism of 'clock recovery'. For an example of actual implementation, see \cite{icelynx}.
+The receivers can use this pulse for an reference of Phase Lock Loop circuit. This is a mechanism of 'clock recovery'. For an example of actual implementation, see\cite{icelynx}.
 
 
 \subsection{Signal processing for internal mixing}
 \label{sec:internal-mixing}
 
-Most devices for production use have several ports for analog/digital audio input/output. Such devices have DSP to process several signals from/to the ports for internal mixing. This is 'zero latency hardware monitoring', which each vendor insists.
+Most devices for production have several ports for analog/digital audio input/output. Such devices have DSP to process several signals from/to the ports for internal mixing. This is 'zero latency hardware monitoring', which each vendor insists.
 
 In the DSP side, outgoing packet is a sink of audio signals and incoming packet is a source of audio signals. The DSP is between IEC 61883-1/6 layer and DAC/ADC for audio ports.
 
@@ -409,20 +408,20 @@ The way to control the DSP behaviour depends on each chipset or model.
 
 \subsection{Some options for sampling clock source for DSP}
 
-Most devices for production use have several options for source of clock. The source is used for input clock of DSP. The options are:
+Most devices for production have several options for source of clock. The source is used for input clock of DSP. The options are:
 \begin{itemize}
 	\item Signal from internal clock source
-	\item Signal from input of S/PDIF, ADAT and Word Clock
+	\item Signal from input of S/PDIF, ADAT or Word Clock
 	\item Signal with nominal isochronous cycle (8kHz)
-	\item Signal with recovered clock as described in previous subsection (4.000/5,512/6,000Hz)
+	\item Signal with recovered clock as described in previous subsection (4.0/5.512/6.0kHz)
 \end{itemize}
 
-The way to change or check current source of clock depends on each chipset or mode. When non-internal source is selected, sampling rate should be fixed according to the signal from external devices.
+The way to change or check current source of clock depends on each chipset or mode. When an external source is selected, sampling rate should be fixed according to the signal from an external source.
 
 \subsection{Duplex streams with timestamp synchronization}
 \label{sec:duplex-streams}
 
-As described in former subsection, each AMDTP packet delivers 'presentation time', in the sequence of value in SYT field. When devices support both of transmiting/receiving streams, ideally, the generator of the timestamp should be one, for better synchronization between transmitter and receiver. This is a requirement to pass the value of SYT field in a packets to a packets in an opposite direction.
+As described in former subsection, each AMDTP packet delivers 'presentation time' in the sequence of value in SYT field. When a pair of device supports both of transmiting/receiving streams, the generator of the timestamp should be one of the devices for better synchronization between transmitter and receiver. This idea requires timing slaves to regenerate the sequence of value in SYT field for outgoing packets according to an incoming packet.
 
 \begin{figure}[H]
 	\centering
@@ -431,36 +430,23 @@ As described in former subsection, each AMDTP packet delivers 'presentation time
 	\label{duplex-timestamp}
 \end{figure}
 
-Moreover, in previous subsection, the sequence of value in SYT field can generate a pulse and the pulse can be selected as source of clock. This option means that a device can delegate 'timing master' to the generator.
-
 
 \subsection{Different formation of data channel in a data block of packet}
 
-In IEC 61883-6\cite{iec61883-6-1, iec61883-6-2}, a data block of packet can include several types of data channel. Each data is transferred by each data channel in packets. For example, Multi Bit Linear Audio (MBLA) data channel for PCM samples, MIDI Conformant data channel for MIDI messages and IEC 60958 Conformant data channel for IEC 60958 PCM samples.
+In IEC 61883-6\cite{iec61883-6-1, iec61883-6-2}, an event is represented as a data block. The data block can include several types of data in each data channel. For example, Multi Bit Linear Audio (MBLA) data channel for PCM samples, MIDI Conformant data channel for MIDI messages and IEC 60958 Conformant data channel for PCM samples. Each model has its own formation and the number of data channels, depending on sampling frequency or a certain modes, even if these models use the same chipset.
 
-In IEC 61883-6:2005\cite{iec61883-6-2}, the position of each data channel is defined:
-\begin{verbatim}
-IEC 60958 Conformant Data < Multi-bit Linear Audio <
-	MIDI Conformant Data < SMPTE Time Code < Sample Count
-\end{verbatim}
-
-Each model has its own formation of data channels, depending on sampling frequency or a certain modes, even if these models apply the same chipset. The way to retrieve information about the formation depends on each chipset.
+The way to retrieve information about the formation depends on each chipset.
 
 \subsection{Chipset specific operations and quirks}
 
-Although there are some specifications, each device has specific quirks due to chipset or vendor's customization. Especially, the way to control DSP is largely different. Currently quirks of four chipsets are clear.
+Although there are some common specifications, each device has specific quirks due to chipset or vendor's customization. Especially, the way to control DSP is largely different. Currently quirks of four chipsets are clear.
 
 \subsubsection{Fireworks}
-Fireworks is a board module which Echo Audio produced. This module consists of three chipsets:
-\begin{itemize}
-\item Communication chipset for IEEE1394 PHY/Link and IEC 61883-1/6 (Texas Instruments iceLynx Micro)
-\item DSP or/and FPGA for signal processing
-\item Flash Memory to store firmwares
-\end{itemize}
+Fireworks is a board module which Echo Audio produced. This module consists of three chipsets: Communication chipset for IEEE1394 PHY/Link and IEC 61883-1/6 (Texas Instruments iceLynx Micro), DSP or/and FPGA for signal processing, Flash Memory to store firmwares.
 
-Fireworks uses its own mechanism for transaction. Drivers transmit commands to a specific address on device, and the device transmit responses to a specific address on controller. Therefore Fireworks has unique command sets. Although this transaction is transferred to specific addresses, there's another way to transfer commands and responses as AV/C vendor specific commands.
+Fireworks uses its own mechanism for transaction. Drivers transmit commands to a specific address on device, and the device transmit responses to a specific address on controller. Fireworks, therefore, has unique command sets. Although this transaction is transferred to specific addresses, there's another way to transfer commands and responses as AV/C vendor specific commands.
 
-Fireworks manages streams by CMP and transfers AMDTP packets in blocking mode. But Fireworks streams are not fully compliant to IEC 61883-1. In IEC 61883-1, the value of data block counter means the number of packets which has already transferred. But in Fireworks, it means the number of data blocks which has transferred including current packet. Furthermore, its empty packets are transferred at tag b00 in isochronous packet.
+Fireworks manages streams by CMP and transfers AMDTP packets in blocking mode. But Fireworks streams are not fully compliant to IEC 61883-1. In IEC 61883-1, the value of data block counter means the number of packets which has already transferred. But in Fireworks, it means the number of data blocks which has transferred including current packet. Furthermore, its empty packets are transferred at tag b00 in isochronous packet. Additionally, Fireworks has more quirks depending on firmware version for iceLynx Micro.
 
 
 \subsubsection{BeBoB}
@@ -468,7 +454,7 @@ BeBoB is 'BridgeCo enhanced Breakout Box'. This is installed to firewire devices
 
 BeBoB uses CMP to maintain AMDTP streams but some BeBoB based devices need both connections to transmit AMDTP stream. BeBoB transfers AMDTP packets in blocking mode.
 
-BeBoB supports AV/C General command \cite{avc-general-4-2}, AV/C Audio Subunit command \cite{avc-audio-1}, AV/C Music Subunit command \cite{avc-music-1} and AV/C Descriptor Mechanism \cite{avc-general-enhancement}. Furthermore, BeBoB uses its own extension of AV/C commands \cite{bebob-1, bebob-2}. But BeBoB can be customized largely, therefore there're some model specific operations. The models sometimes use no AV/C commands the AV/C commands.
+BeBoB supports AV/C General command\cite{avc-general-4-2}, AV/C Audio Subunit command\cite{avc-audio-1}, AV/C Music Subunit command\cite{avc-music-1} and AV/C Descriptor Mechanism\cite{avc-general-enhancement}. Furthermore, BeBoB uses its own extension of AV/C commands\cite{bebob-1, bebob-2}. But BeBoB can be customized largely, therefore there're some model specific operations. The models sometimes use no AV/C commands the AV/C commands.
 
 
 \subsubsection{OXFW970/971}
@@ -476,7 +462,7 @@ OXFW970/971 was produced by Oxford Semiconductor.
 
 OXFW970/971 uses CMP to maintain AMDTP streams and transfers AMDTP packet in non-blocking mode.
 
-OXFW970/971 support AV/C general command \cite{avc-general-4-2} and AV/C Audio subunit command \cite{avc-audio-1}.
+OXFW970/971 support AV/C general command\cite{avc-general-4-2} and AV/C Audio subunit command\cite{avc-audio-1}.
 
 \subsubsection{Dice}
 Dice is Digital Interface Communications Engine which TC Applied Technologies produces.
@@ -924,7 +910,7 @@ As of 2013, AMDTP functionality uses 48 queues \footnote{QUEUE\_LENGTH in sound/
 
 There is a case that snd-firewire-lib fails to continue streaming. It's to fail queueing packets. To check whether a stream is running or not, amdtp\_out\_stream\_running() is used, and amdtp\_out\_streaming\_error() is used to detect error. Once streaming becomes error state, the stream should be stopped by amdtp\_out\_stream\_stop(), then start by amdtp\_out\_stream\_start() again.
 
-As of 2013, this functionality doesn't allow drivers to perform as a timing slave. Although a timing slave is required to handle the sequence of value in SYT field from incoming packets to outgoing packets \ref{sec:duplex-streams}, the functionality doesn't support incoming packets. The functionality, therefore, includes the generators of the sequence of value in SYT field and the number of data blocks in each packets because these sequences are relevant to each other. In blocking mode, the number of data blocks is fixed according to SYT\_INTERVAL. In non-blocking mode, it's not a single way to calculate the number of data blocks in each packets \cite{iec61883-6-1, iec61883-6-2}.
+As of 2013, this functionality doesn't allow drivers to perform as a timing slave. Although a timing slave is required to handle the sequence of value in SYT field from incoming packets to outgoing packets \ref{sec:duplex-streams}, the functionality doesn't support incoming packets. The functionality, therefore, includes the generators of the sequence of value in SYT field and the number of data blocks in each packets because these sequences are relevant to each other. In blocking mode, the number of data blocks is fixed according to SYT\_INTERVAL. In non-blocking mode, it's not a single way to calculate the number of data blocks in each packets\cite{iec61883-6-1, iec61883-6-2}.
 
 \subsection{Requirements for ALSA firewire stack}
 
@@ -1021,7 +1007,7 @@ As a default, any AMDTP streams are not associated. For duplex streams with time
 \end{figure}
 
 
-In IEC 61883-6 \cite{iec61883-6-1, iec61883-6-2} and MMA/AMEI RP-027 \cite{amei-rp27}, one MIDI Conformant data channel supports 8 MIDI substreams. This work newly adds a support of this multiplexed MIDI substream in AMDTP stream. During streaming, each drivers can trigger MIDI messages with amdtp\_stream\_midi\_trigger(). Some models ignore MIDI messages in more than 8 data blocks in an packet. This may be due to a gap of data rate between MIDI bus and IEEE 1394 bus. To handle this quirk, struct amdtp\_stream.rx\_blocks\_for\_midi is used.
+In IEC 61883-6\cite{iec61883-6-1, iec61883-6-2} and MMA/AMEI RP-027\cite{amei-rp27}, one MIDI Conformant data channel supports 8 MIDI substreams. This work newly adds a support of this multiplexed MIDI substream in AMDTP stream. During streaming, each drivers can trigger MIDI messages with amdtp\_stream\_midi\_trigger(). Some models ignore MIDI messages in more than 8 data blocks in an packet. This may be due to a gap of data rate between MIDI bus and IEEE 1394 bus. To handle this quirk, struct amdtp\_stream.rx\_blocks\_for\_midi is used.
 
 For PCM component, this work newly adds amdtp\_stream\_add\_hw\_constraints() to add PCM constraint according to parameters of AMDTP stream. This function should be called after all of needed flags are set to an instance of AMDTP stream structure.
 
