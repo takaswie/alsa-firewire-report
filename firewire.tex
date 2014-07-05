@@ -509,7 +509,7 @@ There're no actions till 2010 to support firewire sound devices. An ALSA develop
 As of 2013, ALSA firewire stack generally supports PCM playback only, while FFADO supports more functionality. If there're some ways for ALSA applications to use FFADO, or there're some ways in user-land for ALSA applications to access the sound devices, it doesn't matter that ALSA firewire stack is cheap. In next section, I investigate ALSA implementation in user-land to seek a solution for this issue.
 
 
-\section{Investigation of user-land driver for ALSA}
+\section{Investigation for user-land driver}
 
 In IEC 61883-6\cite{iec61883-6-1,iec61883-6-2}, a packet can include several types of data, such like PCM samples and MIDI messages. Additionally, 'presentation time' processing needs a stream from a timestamp generator. In these reasons, when several ALSA applications run for playback and capture PCM samples/MIDI messages, these applications require Interprocess Communication (IPC) between packetization process and application processes.
 
@@ -682,7 +682,7 @@ When device is connected, the driver registers ALSA character devices except for
 In this section, I investigate some software implements in user-land to seek better ways for ALSA applications and firewire driver. As a result, I can conclude that the best way is to implement the drivers in PulseAudio, and realize the work is external to ALSA user-land. In the next section, I investigate ALSA kernel-land to seek another way for my purpose.
 
 
-\section{Investigation of kernel-land driver for ALSA}
+\section{Investigation for kernel-land driver}
 
 In this section, I investigate ALSA implementation in kernel-land.
 
