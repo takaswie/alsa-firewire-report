@@ -432,6 +432,7 @@ As described in former subsection, each AMDTP packet delivers 'presentation time
 
 
 \subsection{Different formation of data channel in a data block of packet}
+\label{sec:formation-data-block}
 
 In IEC 61883-6\cite{iec61883-6-1, iec61883-6-2}, a data block represents an event. The data block can include several types of data in each data channel. For example, Multi Bit Linear Audio (MBLA) data channel for PCM samples, MIDI Conformant data channel for MIDI messages and IEC 60958 Conformant data channel for PCM samples. Each model has different number of data channel and its own formation, depending on sampling frequency or a certain modes, even if these models use the same chipset.
 
@@ -512,13 +513,19 @@ As of 2013, ALSA firewire stack generally supports PCM playback only, while FFAD
 
 \section{Investigation for user-land driver}
 
-In IEC 61883-6\cite{iec61883-6-1,iec61883-6-2}, a packet can include several types of data, such like PCM samples and MIDI messages. Additionally, for 'presentation time', incoming/outgoing streams must be handled to pass the value of SYT field. In these reasons, when several ALSA applications run for playback and capture PCM samples/MIDI messages, these applications require Interprocess Communication (IPC) between packetization process and application processes.
+In this section, I investigate the way to implement firewire sound device driver for ALSA applications in user-land.
 
-There're a few possibilities to implement the requirement in user-land. They're ALSA PCM plugins, ALSA External PCM plugins and CUSE application. In this section, at first, I describe ALSA implementation in user-land. Next, I investigate the three possibilities.
+\subsection{Requirements for user-land driver}
+
+In modern OS (operating system), each process has an isolated address space, to protect a process from the other processes. OS has a mechanism to allow processes to communicate to each other. This mechanism is IPC (interprocess communication). Linux supports some ways for IPC.
+
+IPC is important for firewire sound device driver because of two reasons; AMDTP packets can include several types of data (section \ref{sec:formation-data-block} to page \pageref{sec:formation-data-block}), and duplex streams must be handled for 'presentation time' (section \ref{sec:duplex-streams} to page \pageref{sec:duplex-streams}). When several ALSA applications run for playback and capture PCM samples/MIDI messages, these applications require IPC between a packetization process and application processes.
+
+There're a few possibilities to implement the driver with IPC. They are ALSA PCM plugins, ALSA External PCM plugins and CUSE application. Before investigating them, I describe ALSA implementation in user-land.
 
 \subsection{ALSA implementation in user-land}
 
-Modern CPUs have several modes to restrict software's access to system resources. In Linux, two modes are supported. One is user-mode and another is kernel-mode. In user-mode, software is forbidden to access to hardware resources. Software executes system-call to switch into kernel-mode and access to hardware resources, then the process returns to user-mode.
+Modern CPU (central processing unit) has several modes to restrict software's access to system resources. In Linux, two modes are supported. One is user-mode and another is kernel-mode. In user-mode, software is forbidden to access to hardware resources. Software executes system-call to switch into kernel-mode and access to hardware resources, then the process returns to user-mode.
 
 The resources of sound devices are also hardware resources, therefore ALSA applications should execute system-call to communicate to them. In ALSA, the entry points for system-call is character devices and the system-call is file operations to them. In ALSA, most of file operations are ioctl(2) with unique requests. I think ALSA developers requires more specific operations than simple file operations such like read(2)/write(2).
 
@@ -691,7 +698,7 @@ In this section, I investigate some software implementations in user-land to see
 
 In this section, I investigate ALSA implementation in kernel-land.
 
-Generally, after executing system-call, a process is running in kernel-mode and can access to hardware resources. If the data from hardware did not arrive yet, the process requests process-scheduler to generate context-switch and sleeps. Then the another process gain CPU and continue to run. Before sleeping, the process adds an event into wait-queue for waking-up. In this case, the event is the data has come. Every time when requested to generate context-switch, process-scheduler checks events in wait-queue and select a process with enough event. This is a part of process-scheduling.
+Generally, after executing system-call, a process is running in kernel-mode and can access to hardware resources. If the data from hardware did not arrive yet, the process requests process-scheduler to generate context-switch and sleeps. Then the another process gain CPU and continue to run. Before sleeping, the process registers an event for waking-up. Every time when requested to generate context-switch, process-scheduler checks registered events and decide a process to awake. This is a part of process-scheduling.
 
 When ALSA application executes system-call, the process in kernel-mode arrives at the codes in ALSA Core. ALSA Core includes some modules for each interface such as PCM. The code in these modules check events and continue the process if the event occurs. Else, it makes the process to sleep. When sound devices generate hardware interrupt, each ALSA driver handles the interrupt and generate a event. This is a basic work of ALSA implementation in kernel-land.
 
