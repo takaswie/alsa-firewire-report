@@ -742,6 +742,8 @@ When the parameters are decided, driver keeps PCM ring buffer. In most case, dri
 
 The state of this buffer is described in the other buffers. They're 'status' buffer and 'control' buffer. These buffers are kept in kernel-space by PCM Component when applications or master plugins open hw plugin. Then, in most case, 'hw\_ptr' and 'appl\_ptr' in these buffers are mapped to processes' virtual address area\footnote{When failed to mmap(2), an alternative way is applied. hw plugin keeps a buffer for sync\_ptr structure and execute ioctl(2) to update this pointer when any PCM frames are handled.}.
 
+\begin{figure}
+\small
 \begin{verbatim}
 struct snd_pcm_mmap_status {
         snd_pcm_state_t state;
@@ -752,13 +754,15 @@ struct snd_pcm_mmap_status {
         struct timespec audio_tstamp;
 };
 \end{verbatim}
-
 \begin{verbatim}
 struct snd_pcm_mmap_control {
         snd_pcm_uframes_t appl_ptr;
         snd_pcm_uframes_t avail_min;
 };
 \end{verbatim}
+\caption{{Structures for ring buffer status and control}}
+\label{pcm-mmap-status-control}
+\end{figure}
 
 The 'appl\_ptr' is updated only by applications and there's two cases. One of the cases is that some PCM frames are written or read by non-mmap functions\footnote{The functions are snd\_pcm\_writei() / snd\_pcm\_writen() / snd\_pcm\_readi() / snd\_pcm\_readn() but be sure to plugin-chain.}. In this case, PCM component moves the 'appl\_ptr' in kernel-space by the number of requested frames. Another case is that some PCM frames are committed by mmap functions\footnote{The function may be snd\_pcm\_mmap\_commit() but be sure to plugin-chain}. In this case, hw plugin changes the 'appl\_ptr' in user-space by the number of frames.
 
@@ -1081,6 +1085,8 @@ To help debug, the drivers add proc nodes under the card's "firewire" subdirecto
 
 Fireworks driver locates in sound/firewire/fireworks/ and consists of 9 files. When initializing, the driver registers a handler into a certain address on host controller to receive responses of Fireworks transaction. Currently the maximum length of Fireworks transaction is 304 bytes (for isochronous channel mapping), therefore 256 bytes are allocated for the handler including enough space. Fireworks has a command to change the address. But the driver uses the default address without this command because the address space on host controller is an exclusive resource and it's preferable to allocate as small as possible. The structure of Fireworks transaction is in include/uapi/sound/firewire.h.
 
+\begin{figure}[H]
+\small
 \begin{verbatim}
 #define SNDRV_FIREWIRE_EVENT_EFW_RESPONSE       0x4e617475
 struct snd_firewire_event_efw_response {
@@ -1100,8 +1106,11 @@ struct snd_efw_transaction {
         __be32 params[0];
 };
 \end{verbatim}
+\caption{API for Fireworks transaction}
+\label{uapi-fireworks-transaction}
+\end{figure}
 
-ALSA applications can transmit request by writing hwdep interface. Each instance of fireworks driver has a queue to store the responses and ALSA applications can read them via hwdep interface, too. There is a rule for request that ALSA applications must use the correct value for 'seqnum' member between 0 to SND\_EFW\_TRANSACTION\_USER\_SEQNUM\_MAX because value of out of the range is used by the driver itself. I note that the driver doesn't implement whole fireworks commands, implements needed commands to maintain streams or help debug.
+ALSA applications can transmit request by writing hwdep interface. Each instance of fireworks driver has a queue to store the responses and ALSA applications can read them via hwdep interface, too. There is a rule for request that ALSA applications must use the correct value for 'seqnum' member between 0 to SND\_EFW\_TRANSACTION\_USER\_SEQNUM\_MAX because value of out of the range is used by the driver itself. I note that the driver doesn't implement whole fireworks commands, implements needed commands to maintain streams or help debug. You can see most kinds of fireworks transaction in FFADO\footnote{http://subversion.ffado.org/browser/trunk/libffado/src/fireworks/efc}.
 
 Fireworks has two modes to transmit AMDTP packets. In Windows mode, the value of dbc in first CIP header is zero and whole the second CIP header is used to indicate timestamp. Another is IEC 61883 mode but this is not compliant to IEC 61883-1/6. The value of data block counter means the number of data blocks till the end of each packet. Additionally, Fireworks transmits empty packet with tag 0 in IEEE 1394 isochronous packet. Furthermore, Fireworks has some quirks depending on model and its firmware version. To support such quirks, the driver apply several flags to amdtp structure, but CMP is normal and separately from each direction.
 
@@ -1119,6 +1128,8 @@ Dice driver may be moved to sound/firewire/dice/ and split to 9 files. Originall
 
 Dice has its own mechanism to notify status change, therefore the driver gives a way to read the notification via hwdep interface. It's implemented as a type of event I described.
 
+\begin{figure}[H]
+\small
 \begin{verbatim}
 #define SNDRV_FIREWIRE_EVENT_DICE_NOTIFICATION   0xd1ce004e
 struct snd_firewire_event_dice_notification {
@@ -1126,8 +1137,11 @@ struct snd_firewire_event_dice_notification {
         unsigned int notification; /* DICE-specific bits */
 };
 \end{verbatim}
+\caption{API for Dice notification}
+\label{uapi-dice-notification}
+\end{figure}
 
-ALSA applications read the event and parse it to know current status.
+ALSA applications read the event and parse it to know current status. The driver allocate a handler when probing each device. The length of Dice notification is just 4 bytes, therefore, it's reasonable to allocate an address for each device.
 
 Dice has a quirk at bus reset not to react any transactions for reconnection. In this reason, the driver stops any streams at bus reset.
 
