@@ -1004,7 +1004,7 @@ This work also enables drivers to call amdtp\_stream\_set\_pcm\_format() during 
 
 This work adds an argument to cmp\_connection\_init(), to indicate direction. After initializing, the instance of CMP is handled as what it was.
 
-Each driver can read iPCR/oPCR by transaction in any time. To confirm no drivers handle the device, cmp\_connection\_check\_used() is used. This is a consideration about user-land driver.
+Each driver can read iPCR/oPCR by transaction in any time. To confirm no drivers handle the device, cmp\_connection\_check\_used() is used. This is a consideration about user-land driver. I also proposed the same idea for user-land driver.\footnote{[FFADO-devel] Adjustment between FFADO/ALSA for Firewire drivers  http://sourceforge.net/p/ffado/mailman/message/31856195/}.
 
 I note that the value of payload field in iPCR is not used to keep bandwidth because some device chip reports a wrong value. Instead of this, snd-firewire-lib uses the value of data\_block\_quadlets member in struct amdtp\_stream.
 
