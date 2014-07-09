@@ -1825,7 +1825,7 @@ The 'amdtp\_stream\_pcm\_running()' is to check whether PCM substreams is runnin
 #define AMDTP_MAX_CHANNELS_FOR_MIDI     1
 \end{verbatim}
 
-This describes the maximum number of MIDI Conformant data channels in an AMDTP packet which firewire-lib can handle. According to IEC 61883-6:2005, 8 MPX-MIDI data streams are multiplexed into one MIDI Conformant data channel, hence the number of maximum MIDI ports which firewire-lib can support is 8.
+This describes the maximum number of MIDI Conformant data channels in an AMDTP packet which firewire-lib can handle. 8 MPX-MIDI data streams are multiplexed into one MIDI Conformant data channel\cite{amei-rp27, iec61883-6-2}, hence the number of maximum MIDI ports which firewire-lib can support is 8.
 
 \begin{verbatim}
 void amdtp_stream_midi_trigger(struct amdtp_stream *s,
