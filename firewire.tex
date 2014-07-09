@@ -1082,7 +1082,7 @@ struct snd_efw_transaction {
 \label{uapi-fireworks-transaction}
 \end{figure}
 
-ALSA applications can transmit request by writing hwdep interface. Each instance of fireworks driver has a queue to store the responses and ALSA applications can read them via hwdep interface, too. There is a rule for request that ALSA applications must use the correct value for 'seqnum' member between 0 to SND\_EFW\_TRANSACTION\_USER\_SEQNUM\_MAX because value of out of the range is used by the driver itself. I note that the driver doesn't implement whole fireworks commands, implements needed commands to maintain streams or help debug. You can see most kinds of fireworks transaction in FFADO\footnote{http://subversion.ffado.org/browser/trunk/libffado/src/fireworks/efc}.
+ALSA hwdep applications can transmit request by writing hwdep interface. Each instance of fireworks driver has a queue to store the responses and ALSA hwdep applications can read them via hwdep interface, too. There is a rule for request that ALSA hwdep applications must use the correct value for 'seqnum' member between 0 to SND\_EFW\_TRANSACTION\_USER\_SEQNUM\_MAX because value of out of the range is used by the driver itself. I note that the driver doesn't implement whole fireworks commands, implements needed commands to maintain streams or help debug. You can see most kinds of fireworks transaction in FFADO\footnote{http://subversion.ffado.org/browser/trunk/libffado/src/fireworks/efc}.
 
 Fireworks has two modes to transmit AMDTP packets. In Windows mode, the value of dbc in first CIP header is zero and whole the second CIP header is used to indicate timestamp. Another is IEC 61883 mode but this is not compliant to IEC 61883-1/6. The value of data block counter means the number of data blocks till the end of each packet. Additionally, Fireworks transmits empty packet with tag 0 in IEEE 1394 isochronous packet. Furthermore, Fireworks has some quirks depending on model and its firmware version. To support such quirks, the driver apply several flags to amdtp structure, but CMP is normal and separately from each direction.
 
@@ -1098,7 +1098,7 @@ BeBoB has a quirk at bus reset. It transmits packets with disorder just after bu
 
 Dice driver may be moved to sound/firewire/dice/ and split to 9 files. Originally, the driver supports PCM playback but may be extended to PCM/MIDI playback and capture.
 
-Dice has its own mechanism to notify status change, therefore the driver gives a way to read the notification via hwdep interface. It's implemented as a type of event I described.
+Dice has its own mechanism to notify status change, therefore the driver gives a way to read the notification via hwdep interface. It's implemented as a type of event I described. ALSA hwdep applications read the event and parse it to know current status.
 
 \begin{figure}[H]
 \small
@@ -1113,7 +1113,7 @@ struct snd_firewire_event_dice_notification {
 \label{uapi-dice-notification}
 \end{figure}
 
-ALSA applications read the event and parse it to know current status. The driver allocate a handler when probing each device. The length of Dice notification is just 4 bytes, therefore, it's reasonable to allocate an address for each device.
+The driver allocate a handler when probing each device. The length of Dice notification is just 4 bytes, therefore, it's reasonable to allocate an address for each device.
 
 Dice has a quirk at bus reset not to react any transactions for reconnection. In this reason, the driver stops any streams at bus reset.
 
