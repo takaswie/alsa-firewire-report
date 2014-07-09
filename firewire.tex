@@ -535,7 +535,7 @@ The hw plugin executes file operations to PCM character devices. In most case, i
 	\centering
 	\includegraphics{./img/alsa-hw.svg.eps}
 	\caption{{ALSA hw PCM plugin}}
-	\label{alsa_hw_plugin}
+	\label{fig:alsa-hw-plugin}
 \end{figure}
 
 When an ALSA application calls PCM open API of PCM interface, this function read runtime configuration files and parse it. In ALSA default, /usr/share/alsa/alsa.conf is loaded at first. This file loads /usr/share/alsa/alsa.conf.d/*, /etc/asound.conf and ~/.asoundrc. As a result, for PCM runtime, several PCM nodes are available. For example, hw, plughw(plug plugin with hw slave), dmix, dsnoop and default, see Figure \ref{pcm-nodes-playback}.
@@ -578,7 +578,7 @@ ALSA library has PCM plugins for several purpose\footnote{src/pcm/ in alsa-lib} 
 
 When applications open dmix/dsnoop PCM node by calling snd\_pcm\_open(), the dmix/dsnoop plugins keep or connect System V Shared Memory and System V Semaphore. Then the shared memory is attached to the virtual memory space of each application process. This shared memory is used to share parameters and status of PCM stream for slave. The slave of dmix/dsnoop plugin is fixed to hw plugin. Additionally, the dmix plugin keeps one shared memory for multiplexing buffer, too.
 
-When calling 'snd\_pcm\_writei()/snd\_pcm\_mmap\_commit()', the dmix plugin multiplexes PCM frames in application buffer and in shared memory, then write into slave buffer. The PCM frames are stored to shared memory and used by the other applications for next multiplexing. The shared memory is used as 'cache'. This allows any processes to multiplex PCM frames according to their timing and write the frames to buffer for slave, while these processes don't move a buffer pointer for application at slave (hw) by usual way.
+When calling 'snd\_pcm\_writei()/snd\_pcm\_mmap\_commit()', the dmix plugin multiplexes PCM frames in application buffer and in shared memory, then write into slave buffer. The PCM frames are stored to shared memory and used by the other applications for next multiplexing. The shared memory is used as 'cache'. This allows any processes to multiplex PCM frames according to their timing and write the frames to buffer for slave. The buffer of slave is added by hw PCM plugin and it's the same mapped buffer which driver has (Figure \ref{fig:alsa-hw-plugin}). Although writing PCM frames, these processes don't move a buffer pointer for application by usual way so that processes can write PCM frames into the same position.
 
 The dsnoop PCM plugin is simpler than dmix PCM plugin because there's no need to multiplex PCM samples. Each application read PCM frames from shared memory.
 
