@@ -5,7 +5,7 @@
 
 \title{Enhancement of ALSA firewire stack}
 \author{Takashi Sakamoto}
-\date{2014/06/26}
+\date{2014/07/09}
 \maketitle{}
 
 \begin{abstract}
@@ -434,7 +434,7 @@ As described in former subsection, each AMDTP packet delivers 'presentation time
 \subsection{Different formation of data channel in a data block of packet}
 \label{sec:formation-data-block}
 
-In IEC 61883-6\cite{iec61883-6-1, iec61883-6-2}, a data block represents an event. The data block can include several types of data in each data channel. For example, Multi Bit Linear Audio (MBLA) data channel for PCM samples, MIDI Conformant data channel for MIDI messages and IEC 60958 Conformant data channel for PCM samples. Each model has different number of data channel and its own formation, depending on sampling frequency or a certain modes, even if these models use the same chipset.
+In IEC 61883-6\cite{iec61883-6-1, iec61883-6-2}, a data block represents an event. The data block can include several types of data in each data channel. For example, Multi Bit Linear Audio (MBLA) data channel for PCM samples, MIDI Conformant data channel for MIDI messages and IEC 60958 Conformant data channel for PCM samples. Each model has different number of data channel and its own formation, depending on sampling frequency and a certain modes, even if these models use the same chipset.
 
 The way to get information about the formation depends on each chipset.
 
@@ -736,7 +736,7 @@ ALSA PCM Interface and PCM Component are for transmission of PCM frames between 
 
 An instance of PCM Component includes two members for PCM streams. One is for an incoming stream and another is for an outgoing stream. The stream has several PCM substreams, which the driver adds according to device's specification. For the substreams, ALSA Core adds PCM character devices. When applications open PCM character devices by PCM interface, corresponding PCM substream is opened and PCM runtime is attached to the substream.
 
-The PCM runtime has several state, 'open', 'setup', 'prepared', 'running', 'xrun', 'draining', 'paused', 'suspended' and 'disconnected'\cite{alsa-lib}. Applications changes the state by PCM interface and corresponding method of driver is called by PCM component. The runtime includes several information such like hardware description and hardware/software parameters. When the runtime is created, drivers set the hardware description in the runtime. Next, the application sets the hardware/software parameters by PCM interface.
+The PCM runtime has several state, 'open', 'setup', 'prepared', 'running', 'xrun', 'draining', 'paused', 'suspended' and 'disconnected'\cite{alsa-lib}. Applications changes the state by PCM interface, then corresponding method of driver is called by PCM component. The runtime includes several information such like hardware description and hardware/software parameters. When the runtime is created, drivers set the hardware description in the runtime. Next, the application sets the hardware/software parameters by PCM interface.
 
 When the parameters are decided, driver keeps PCM ring buffer. In most case, drivers support mmap file operation of PCM Component. Then PCM interface maps this buffer to process' virtual address area when applications or master plugins set mmap access flags to the hw\_params\footnote{SND\_PCM\_ACCESS\_MMAP\_INTERLEAVED, SND\_PCM\_ACCESS\_MMAP\_NONINTERLEAVED and SND\_PCM\_ACCESS\_MMAP\_COMPLEX}.
 
@@ -1118,7 +1118,7 @@ Fireworks has a quirk at bus reset, to restart dbc from zero. To handle this qui
 
 \subsection{BeBoB driver}
 
-BeBoB driver locates in sound/firewire/bebob/ and consists of 12 files. To handle vendor specific operation, the driver has several files for each vendor. Especially, M-Audio largely customized and two models \footnote{Firewire 1814 and ProjectMix I/O} have many specific operations. These devices also has write-only controls. Because of these controls, the driver adds ALSA Control interface, as only an exception.
+BeBoB driver locates in sound/firewire/bebob/ and consists of 12 files. To handle vendor specific operation, the driver has several files for each vendor. Especially, M-Audio largely customized their models and two of them\footnote{Firewire 1814 and ProjectMix I/O} have many specific operations. These two models also has write-only controls and the driver adds ALSA Control interface for the two, as only an exception.
 
 BeBoB has a quirk at bus reset. It transmits packets with disorder just after bus reset. To recover from this discontinuity, the driver uses Linux completion and serialize PCM component .prepare() call and firewire subsystem .update() call.
 
@@ -1159,22 +1159,45 @@ Currently I focus on enabling ALSA to handle devices. There are still some issue
 
 \subsection{OXFW and Dice enhancement}
 
-I already posted patches for these drivers \footnote{[alsa-devel] [RFC][PATCH 00/15 v4] OXFW driver, a successor to firewire-speakers \\ http://mailman.alsa-project.org/pipermail/alsa-devel/2014-May/076581.html} \footnote{[alsa-devel] [RFC][PATCH 00/13 v1] Enhancement for Dice driver \\ http://mailman.alsa-project.org/pipermail/alsa-devel/2014-May/076730.html}. The previous revision of OXFW driver \footnote{It's a part of [alsa-devel] [RFC v3] [PATCH 00/52] Enhancement for support of firewire devices http://mailman.alsa-project.org/pipermail/alsa-devel/2014-January/071820.html} has a regression for a device. The device has several entries for stream formation at a certain sampling rate and parser of driver brought this regression. Dice enhancement adds supports for duplex streams with timestamp synchronization and playback/capture of PCM/MIDI.
+I already posted patches for these drivers \footnote{[alsa-devel] [RFC][PATCH 00/15 v4] OXFW driver, a successor to firewire-speakers \\ http://mailman.alsa-project.org/pipermail/alsa-devel/2014-May/076581.html} \footnote{[alsa-devel] [RFC][PATCH 00/13 v1] Enhancement for Dice driver \\ http://mailman.alsa-project.org/pipermail/alsa-devel/2014-May/076730.html}. The previous revision of OXFW driver \footnote{It's a part of [alsa-devel] [RFC v3] [PATCH 00/52] Enhancement for support of firewire devices http://mailman.alsa-project.org/pipermail/alsa-devel/2014-January/071820.html} has a regression for a device. The device has several entries for stream formation at a certain sampling rate, then parser of driver brought this regression. Dice enhancement adds supports for duplex streams with timestamp synchronization and playback/capture of PCM/MIDI.
 
 I don't have the device confirmed with regression and any Dice based devices. I really need testers.
 
-\subsection{A lack of packet sorting}
-Some Fireworks based devices sometimes transfer packets with disorder. Such sequence of packet is detected as discontinuity and firewire-lib stop streaming. I've already posted a candidate for packet sorting but this is rejected by maintainer in three points:
-\begin{itemize}
-\item AMDTP is nearly real-time protocol thus it should be processed as is.
-\item Currently this quirk is confirmed only on Fireworks thus no need to apply general solution.
-\item A pattern is confirmed for the discontinue sequence of packets. It's possible to add a few codes for this quirk.
-\end{itemize}
+\subsection{A lack of arrangement for severe latency}
+Currently, the minimum number of frames per period is not less than the amount equals to 5 millisecond. PCM component of each driver has a flag, SNDRV\_PCM\_INFO\_BATCH, thus the minimum number of periods in buffer is 2 because its hw\_ptr is changed at each interrupt. As a result, the minimum latency is over 10 millisecond. For severe latency, the size of period should be as smaller as possible.
 
-I confirm the disorder does not always occurs. Further investigation is needed to judge better solution.
+Ideally, the number of PCM frames in a period should be the number of data blocks in packets handled by one interrupt so as a PCM period is corresponds to an interrupt (section \ref{sec:alsa-pcm} to page \pageref{sec:alsa-pcm}). In both of blocking and non-blocking modes, the number of data blocks in each packet is different, while current implementation apply fixed number of packets as an interval of interrupt. The fixed interval of interrupt brings periods without any interrupt, see Figure \ref{fig:interrupt-period}. In this figure, sampling transfer frequency is 44.1kHz, thus the interval of SYT is 8 data blocks. The number of packets in an interrupt is fixed to 4, the number of PCM frames in an period is 16. In blocking mode, PCM period is elapsed two times in 3rd interrupt. In non-blocking mode, PCM period is elapsed two times in 5th interrupt.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics{./img/interrupt-period.svg.eps}
+	\caption{{Packets, interrupt and PCM period}}
+	\label{fig:interrupt-period}
+\end{figure}
+
+To apply severe latency, the interrupt interval should be changed dynamically according to sampling transmission frequency and the number of frames in a period. But this needs correct calculation and estimation for the number of packets till next PCM period. Current implementation uses 5 milliseconds to ensure that at least one interrupt occurs between PCM periods.
+
+
+\subsection{A lack of PCM configuration for virtual surround nodes}
+
+ALSA library has configuration files for each PCM component of sound card\footnote{Usually under /usr/share/alsa/cards/.}. These configuration files have settings for virtual PCM nodes. Some of these nodes are for surround channels such as "front", "side", "surround40" and so on. PulseAudio uses these nodes to decide available mapping for channels.
+
+Such settings use "route" PCM plugin to resolve a mismatch between the number of actual channels and channels requested by ALSA PCM application. The plugin is designed to have the actual number of channels for its parameters in each configuration file.
+
+But most of firewire devices newly supported have a different number of channels depending on models, sampling frequency and a certain modes even if they utilizes the same device chipset (Section \ref{sec:formation-data-block} to page \pageref{sec:formation-data-block}). In this reason, "route" PCM plugin is not available for the settings of these devices, while it's not better to add configuration files to ALSA library for each model because this idea requires ALSA developers to maintain 100 or more files\footnote{For example, "FWSpeakers.conf" and "FireWave.conf" were added to ALSA library 1.0.25, while they are based on OXFW970/971.}.
+
+Instead of "route" PCM plugin, "plug" PCM plugin is available for this purpose. The plugin needs no parameters for actual channels. The plugin can resolve the mismatch of channels, as long as ALSA PCM applications open PCM nodes without "SND\_PCM\_NO\_AUTO\_CHANNELS" flag.
+
+Unfortunately, PulseAudio uses the flag. PulseAudio fails all of trials to detect channel mapping, therefore it cannot handle the devices\footnote{[pulseaudio-discuss] 'Failed to find a working profile' for firewire sound devices http://lists.freedesktop.org/archives/pulseaudio-discuss/2014-January/019685.html}.
+
+Furthermore, most of these firewire devices have settings for DSP (Section \ref{sec:internal-mixing}). ALSA PCM functionality can cause silence when the settings is wrong. For example, there is a device which receives AMDTP packets with 10 MBLA data channels and an ALSA application uses it as a device with stereo channels. Even if ALSA PCM functionality correctly push PCM samples into the first two data channels and fill zero PCM samples in the rest of data channels, the device can generate no sound or sound in unexpected audio ports according to the settings.
+
+As a result, the variety of data channel make it difficult to unified configuration files, and DSP settings weaken a practical meaning of the configuration.
+
+In these reasons, current ALSA library has no configuration files for the firewire devices newly supported.
 
 \subsection{A lack of throttles for MIDI messages in outgoing stream}
-In MIDI specification, its phy layer can transfer 31,250 bit per seccond. This equals to 3,906 Byte per second. But in IEC 61883-6\cite{iec61883-6-1, iec61883-6-2} and MMA/AMEI RP-027\cite{amei-rp27}, the stream can transfer MIDI messages by one eighth of sampling transmit frequency (STF). This is really much than MIDI specification, therefore devices must buffer the gap between these data rate.
+In MIDI specification, its physical layer can transfer 31,250 bit per second. This equals to 3,906 Byte per second. But in IEC 61883-6\cite{iec61883-6-1, iec61883-6-2} and MMA/AMEI RP-027\cite{amei-rp27}, AMDTP stream can transfer MIDI messages by one eighth of sampling transmit frequency (STF). This is really much than MIDI specification, therefore devices must buffer the gap between these data rate.
 
 \begin{table}[H]
 	\centering
@@ -1192,23 +1215,59 @@ In MIDI specification, its phy layer can transfer 31,250 bit per seccond. This e
 	\end{tabular}
 \end{table}
 
-A few devices have buffer-over-flow when receiving much MIDI messages. For example, M-Audio Firewire 1814 transfer discontinuous packets when receiving much MIDI messages. There're some devices which ignores MIDI messages in more than first 8 data blocks in a packet.
+A few devices have buffer-over-flow when receiving much MIDI messages. For example, M-Audio Firewire 1814 transfer discontinuous packets when receiving much MIDI messages. There are some devices which ignores MIDI messages in more than first 8 data blocks in a packet and this seems to be a vendor-specific solution for this issue.
+
 In this reason, ALSA Firewire stack should have a throttle for MIDI messages in outgoing stream.
 
-\subsection{A lack of arrangement for severe latency}
-Currently, the minimum number of frames per period is not less than 5 millisecond. PCM component of each driver has a flag, SNDRV\_PCM\_INFO\_BATCH and the minimum number of periods in buffer is 2. As a result, the minimum latency is over 10 millisecond. For severe latency, the size of period should be as smaller as possible.
+\subsection{A lack of ALSA control interface}
 
-Ideally, the number of PCM frames in a period should be the number of data blocks in packets of one interrupt. But in both of blocking and non-blocking mode, the number of data blocks in packets of one interrupt is different. See Figure \ref{fig:interrupt-period}. In this figure, the interval of SYT is 8 data blocks, the number of packets in an interrupt is 4, the number of PCM frames in an period is 16. In blocking mode, PCM period is elapsed two times in 3rd interrupt. In non-blocking mode, PCM period is elapsed two times in 5th interrupt. These don't follow an idea of PCM period (section \ref{sec:alsa-pcm} to page \pageref{sec:alsa-pcm}).
+Firewire sound devices needs software implementation to control their DSP behaviour (section \ref{sec:internal-mixing} to page \pageref{sec:internal-mixing}) or device specific features.
 
-\begin{figure}[H]
-	\centering
-	\includegraphics{./img/interrupt-period.svg.eps}
-	\caption{{Packets, interrupt and PCM period}}
-	\label{fig:interrupt-period}
+Most devices have some ports for audio input and output. Additionally, they can receive some MBLA data channels. Each input from audio ports and MBLA data channels can be multiplexed to each port to audio output. Furthermore, the ratio to multiplex each input to each output is changeable. As a result, this multiplexing functionality has routing settings by the number of available inputs multiplied by the number of available outputs. In FFADO, this feature is called as 'matrix mixer'.
+
+Moreover, some devices have its specific features; phantom powering or hardware metering. The way to control these feature depends on models.
+
+But ALSA firewire drivers basically have no ALSA control interface because the functionality can be implemented in user-land as FFADO does. Currently, ffado-dbus-server/ffado-mixer is one of recommendations for this purpose but these are isolated from ALSA applications. Control functionality also has the same issue as PCM functionality has.
+
+Like ALSA PCM interface, ALSA Control interface has External Control plugins. It may be possible to give ways to control DSP for ALSA applications with the plugin.
+
+But there is an issue that a few devices have write-only controls, hence there is a need of permanent storage. Current ALSA control interface has no mechanism for the storage.
+
+\subsection{A lack of packet sorting}
+Some Fireworks based devices sometimes transfer packets with disorder, see Figure \ref{fireworks-disorder}. Such sequence of packet is detected as discontinuity and firewire-lib stop streaming.
+
+I've already posted my solution for this issue\footnote{[alsa-devel] [PATCH 09/39] firewire-lib: Add sort function for transmitted packet http://mailman.alsa-project.org/pipermail/alsa-devel/2014-March/073875.html} but this is rejected by a maintainer due to three points:
+\begin{itemize}
+\item AMDTP is nearly real-time protocol, thus it's not acceptable to have a delay of processing packets.
+\item The solution apply general way to sort, while this quirk is currently confirmed only on Fireworks, thus no need to apply general way.
+\item A certain pattern is confirmed to the discontinue sequence of packets. It's possible to add a few codes just for this quirk.
+\end{itemize}
+
+\begin{figure}[htbp]
+\small
+\begin{verbatim}
+Index   Payload CIP header 1    CIP header2
+032     002     3F110028        90FFFFFF
+033     210     3F110030        900410E8
+034     210     3F110038        900424E8
+035     210     3F110040        900438E8
+036     002     3F110040        90FFFFFF
+037     210     3F110050        900464E8 <-
+038     210     3F110048        900450E8 <-
+039     210     3F110058        900478E8
+040     002     3F110058        90FFFFFF
+041     210     3F110068        9004A4E8 <-
+042     210     3F110060        900490E8 <-
+043     210     3F110070        9004B8E8
+044     002     3F110070        90FFFFFF
+045     210     3F110080        9004E4E7 <-
+046     210     3F110078        9004D0E8 <-
+\end{verbatim}
+\caption{A sample of packets with disorder transmitted by Fireworks}
+\label{fireworks-disorder}
 \end{figure}
 
-To apply severe latency, the interrupt interval should be changed dynamically according to sampling transmission frequency and the number of frames in a period. But this needs correct calcularion and expectation of the number of packets till next PCM period. But they are a bit complicated. Current implementation uses 5 miliseconds to ensure that at least one interrupt occurs between PCM periods.
-
+I confirm the disorder does not always occurs less times than correct order. Further investigation is needed for better solution.
 
 \subsection{A few devices freeze when frequent establishing/breaking connections}
 'PreSonus FP10' can freeze when frequent establishing/breaking connections. This brings a disadvantage to PulseAudio. When PulseAudio detects the card, it starts/stops 4 streams at least. Currently PulseAudio cannot detect devices with non-surround channels. But when making PulseAudio detects the device with dbus rule and PulseAudio profiles, it may take the device freezing.
@@ -1222,25 +1281,13 @@ When generating bus reset with ffado-test or jujuutils\footnote{https://code.goo
 This case depends on which devices are connected or removed. If they're Fireworks/BeBoB based devices, streaming sometimes continues and sometimes stops. If they're not Fireworks/BeBoB based device, streaming continues. I don't know the reason exactly but I guess the synchronizing mechanism I describe have some relations. 
 \end{description}
 
-\subsection{A lack of ALSA control interface}
-
-To reduce maintaining effort and source code base, ALSA firewire stack and firewire drivers basically have no ALSA control interface. But the sound devices needs software implementation to control DSP behaviour (section \ref{sec:internal-mixing} to page \pageref{sec:internal-mixing}).
-
-Currently, ffado-dbus-server/ffado-mixer is one of recommendation for this purpose but these implementations are isolated from ALSA applications.
-
-Like ALSA PCM interface, ALSA Control interface has External Control plugins. It may be possible to give ways to control DSP for ALSA applications with the plugin.
-
-But there is an issue that a few devices have write-only controls, hence there is a need of permanent storage. Current ALSA control interface has no mechanism for the storage.
-
-
 \subsection{A lack of synchronizing several devices on the same bus}
-As long as reading manual of PreSonus/Focusrite/PrismSound for BeBoB based devices, there is a way to synchronize devices on the same bus.
-
-This mechanism is driven by handling the value of SYT field in CIP packets:
+As long as reading manual of PreSonus/Focusrite/PrismSound for BeBoB based devices, there is a way to synchronize devices on the same bus. This mechanism is based on clock recovery, therefore it's driven by handling the value of SYT field in CIP packets:
 \begin{itemize}
-\item Driver select a device as 'Sample clock source' then the other devices are 'Sample clock destination'.
-\item Driver handle packets from 'Sample clock source' device.
-\item Driver read SYT and calculate presentation timestamp for each devices, then transfer packets to the other devices.
+\item Driver selects a device as 'Sample clock source' then the other devices are 'Sample clock destination'.
+\item Driver handles packets from the source device.
+\item Driver reads SYT and calculate presentation timestamp for each devices, then transfer packets to the destination devices.
+\item Driver sets recovered clock as sampling clock source for the destinations, in advance.
 \end{itemize}
 
 IEC 61883-6:2005\cite{iec61883-6-2}describes actual examples in Annex D.1.3 Embedded sample-clock jitter.
@@ -1251,7 +1298,7 @@ Currently ALSA Firewire stack doesn't support this mechanism. The reason is a ba
 \item Requirement to handle several streams from/to all devices simultaneously
 \end{itemize}
 
-Instead of this type of synchronization, ALSA Firewire stack handle packets from a device and read SYT, then transfer packets with the value to the device.
+Instead of this type of synchronization, ALSA Firewire stack handle packets from a device and read SYT, then transfer packets with the value to the device. I believe this is enough for general use cases.
 
 \newpage
 
