@@ -77,21 +77,12 @@ IEEE 1394 isochronous communication guarantees to transfer packets at 8,000 time
 	\end{rightwordgroup}
 \end{bytefield}
 \caption{Isochronous packet structure}
-\label{iso-packet}
+\label{fig:iso-packet}
 \end{figure}
 
-\begin{description}
-\item{data length:}
-The length of data field
-\item{tag:}
-The data format of isochronous packet, usually b01 for Common Isochronous Packet(CIP)\cite{iec61883-1-3}
-\item{channel:}
-The channel number for this packet
-\item{tcode:}
-The packet format, fixed at b1010
-\item{sy:}
-Application specific control field
-\end{description}
+In Figure \ref{fig:iso-packet}, data length: The length of data field, tag: The data format of isochronous packet, channel: The channel number for this packet, tcode: The packet format, sy: Application specific control field.
+
+The value of tag field is usually b1010, and the value of tcode field is usually b01 for Common Isochronous Packet(CIP)\cite{iec61883-1-3}, 
 
 \subsubsection{Asynchronous communication}
 IEEE 1394 asynchronous communication has no guarantees for delay. The packet can be fragmented. IEEE 1394 transaction layer handles this types of communication. There are two types of transaction, quadlet and block.
@@ -109,12 +100,12 @@ IEEE 1394 asynchronous communication has no guarantees for delay. The packet can
 		\bitbox{16}{source ID} &
 		\bitbox[tlr]{16}{destination offset} \\
 		\wordbox[blr]{1}{} \\
-		\wordbox{1}{data} \\
+		\wordbox{1}{quadlet data} \\
 		\wordbox{1}{header CRC}
 	\end{rightwordgroup} \\
 \end{bytefield}
 \caption{Asynchronous packet structure for quadlet transaction}
-\label{async-packet-quadlet}
+\label{fig:async-packet-quadlet}
 \end{figure}
 
 \begin{figure}[H]
@@ -134,37 +125,18 @@ IEEE 1394 asynchronous communication has no guarantees for delay. The packet can
 		\bitbox{16}{extended code} \\
 		\wordbox{1}{header CRC} 
 	\end{rightwordgroup} \\
-	\begin{rightwordgroup}{data block}
-		\wordbox[tlr]{3}{data field} \\
+	\begin{rightwordgroup}{payload}
+		\wordbox[tlr]{3}{block data} \\
 		\bitbox[blr]{16}{} &
 		\bitbox{16}{zero pad bytes (if necessary)} \\
-		\wordbox{1}{data CRC}
+		\wordbox{1}{payload CRC}
 	\end{rightwordgroup}
 \end{bytefield}
 \caption{Asynchronous packet structure for block transaction}
-\label{async-packet-block}
+\label{fig:async-packet-block}
 \end{figure}
 
-\begin{description}
-\item{destination ID:}
-Node ID of destination
-\item{tl:}
-Transaction label for a pair of request and response
-\item{rt:}
-The way to retry
-\item{tcode:}
-The type of transaction, read/write/lock and quadlet/block and request/response
-\item{pri:}
-Priority
-\item{source ID:}
-Node ID of source
-\item{destination offset:}
-An address offset on destination's area
-\item{data length:}
-The length of byte in data
-\item{extended code:}
-The type of lock transaction
-\end{description}
+In Figure \ref{fig:async-packet-quadlet} and \ref{fig:async-packet-block}, destination ID: Node ID of destination, tl: Transaction label for a pair of request and response, rt: The way to retry, tcode: The type of transaction, read/write/lock and quadlet/block and request/response, pri: Priority, source ID: Node ID of source, destination offset: An address offset on destination's area, data length: The length of byte of block data, extended code: The type of lock transaction.
 
 \subsection{IEEE 1212}
 
@@ -228,14 +200,9 @@ IEC 61883-1\cite{iec61883-1-1, iec61883-1-2, iec61883-1-3} allows any variations
 \label{fig:amdtp-cip}
 \end{figure}
 
-\begin{description}
-\item{SID:} The node ID for transmitter
-\item{DBS:} The number of quadlets for data blocks
-\item{DBC:} The number of data blocks which has already transferred. This is to detect discontinuity.
-\item{FMT:} Format ID. In AMDTP, 0x10.
-\item{FDF:} Format dependent field. In AMDTP, This field includes 'Event Type' field and 'Sampling Frequency Code' field, described later. Especially, 0xFF means the packet includes no data. 
-\item{SYT:} The offset from isochronous cycle timer. In AMDTP, used to show 'presentation time'. In detail, Section \ref{sec:clock-recovery} to page \pageref{sec:clock-recovery}.
-\end{description}
+In Figure \ref{fig:amdtp-cip}, SID: The node ID for transmitter, DBS: The number of quadlets for data blocks, DBC: The number of data blocks which has already transferred, FMT: Format ID, 0x10 in AMDTP, FDF: Format dependent field, SYT: The offset from isochronous cycle timer.
+
+The value of DBC field is used to detect packet lost. In AMDTP, the value of FMT is 0x10, and FDF field consists of 'Event Type' field and 'Sampling Frequency Code' field described later. On the other hand, 0xff in FDF field is No data code to indicate packet without any data. In AMDTP, the value of SYT field is used to show 'presentation time'. In detail, Section \ref{sec:clock-recovery} to page \pageref{sec:clock-recovery}.
 
 After CIP headers, some data blocks follows. In AMDTP, one data block represents a event. IEC 61883-6\cite{iec61883-6-1, iec61883-6-2} doesn't define meaning of the event, although the event may be a batch of data accompanied with the same timing. There are some ways to describe the data, although AM824 is mostly used.
 
@@ -534,6 +501,7 @@ In this reason, ALSA application developers should always consider the combinati
 ALSA library includes several interfaces. Each interface is for each character device. These character devices are under /dev/snd.
 
 \begin{description}
+\small
 \item[Mixer/hcontrol/control interface] \mbox{} \\
 Interfaces for control character device (/dev/snd/controlC\%i)
 \item[PCM interface] \mbox{} \\
@@ -711,6 +679,7 @@ Each driver registers a card instance to ALSA Core and adds component instances 
 Major modules of ALSA Core are:
 
 \begin{description}
+\small
 \item[snd] \mbox{} \\
 Management of cards and devices, including methods for control interface, helper functions for control component and procfs nodes
 \item[snd\_pcm] \mbox{} \\
@@ -811,6 +780,7 @@ Linux firewire subsystem, so-called Juju\footnote{I don't know the reason.}, is 
 This subsystem locates under drivers/firewire/ and consists of several parts. It includes snoop mode driver for a certain 1394 controller and protocol drivers for RFC 1734, RFC 2855, RFC 3146 and SBP-2, but here I describe core functionality and OHCI 1394 related stuff only:
 
 \begin{description}
+\small
 \item[drivers/firewire/core-cdev.c] \mbox{} \\
 Methods for file operations of fw character devices
 \item[drivers/firewire/core-device.c] \mbox{} \\
@@ -852,6 +822,7 @@ Linux firewire stack has an abstract layer for the controller device. Currently 
 ALSA firewire stack is designed for each driver to communicate to firewire devices via firewire subsystem. ALSA firewire stack locates under sound/firewire/. This stack includes helper functions for IEC 61883-1/6:
 
 \begin{description}
+\small
 \item[sound/firewire/iso-resources.c] \mbox{} \\
    Helper functions to manage isochronous resources
 \item[sound/firewire/cmp.c] \mbox{} \\
@@ -1063,6 +1034,7 @@ MIDI functionality is supported. Most devices have a pair of input/output port b
 Hwdep functionality is used to the same purpose as Dice driver uses. ALSA applications can execute I/Os to this interface and the API is in include/uapi/sound/firewire.h. The requests are:
 
 \begin{description}
+\small
 \item [SNDRV\_FIREWIRE\_IOCTL\_GET\_INFO] \mbox{} \\
 This request returns data of struct snd\_firewire\_get\_info. This information tells the type of driver, firewire card index, GUID for the device and name of fw character device like "fw1,0".
 \item [SNDRV\_FIREWIRE\_IOCTL\_LOCK] \mbox{} \\
