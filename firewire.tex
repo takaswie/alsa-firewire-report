@@ -1152,6 +1152,11 @@ Ideally, the number of PCM frames in a period should be the number of data block
 
 To apply severe latency, the interrupt interval should be changed dynamically according to sampling transmission frequency and the number of frames in a period. But this needs correct calculation and estimation for the number of packets till next PCM period. Current implementation uses 5 milliseconds to ensure that at least one interrupt occurs between PCM periods.
 
+\subsection{A lack of delay for timestamp processing}
+
+When incoming/outgoing streams are associated and a device is a clock master, a driver uses the value of SYT field in incoming packet for the field in outgoing packet. If the master and slave handle the same value of SYT field in the same timing, the outgoing packet should include additional delay by the number of data blocks in packets in a queue. 
+
+Current implementation simply copies the value. I have no issues about this with Fireworks/BeBoB/OXFW. To consider maintenance effort, it's better to keep it what it is.
 
 \subsection{A lack of PCM configuration for virtual surround nodes}
 
