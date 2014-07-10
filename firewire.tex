@@ -5,7 +5,7 @@
 
 \title{Enhancement of ALSA firewire stack}
 \author{Takashi Sakamoto}
-\date{2014/07/09}
+\date{2014/07/10}
 \maketitle{}
 
 \begin{abstract}
@@ -157,8 +157,6 @@ The connection is controlled by Connection Management Procedure (CMP). In CMP, s
 
 The functionality on each node can be controlled by Function Control Protocol (FCP). FCP consists of a pair of transaction for command and response. The address for command is 0xFFFF'F000'0B00 and the address for response is 0xFFFF'F000'D00. The length of data for each transaction is limited by 512 bytes.
 
-IEC 61883 series, itself, came from documents which 1394 Trade Association (1394TA) published. Especially, actual application of FCP is not in public documents and it's in 1394TA documents. The application is called as 'AV/C commands'. There are much variations of AV/C command. A part of documents are applied to the sound devices, including over-specifications\cite{avc-general-4-2, avc-audio-1, avc-music-1, avc-descriptor-1, avc-info-block-1, avc-stream-format-1, avc-stream-format-1-1, avc-rate-control}.
-
 
 \subsection{IEC 61883-6}
 
@@ -239,6 +237,10 @@ As described before, the event is accompanied with timing because the event is r
 \end{table}
 
 For detail to transfer the packet, see Section \ref{sec:clock-recovery} to page \pageref{sec:clock-recovery}.
+
+\subsection{AV/C commands}
+
+IEC 61883 series, itself, came from documents which 1394 Trade Association (1394TA) published. Especially, actual application of FCP is not in public documents and in 1394TA documents. The application is called as 'AV/C commands'. There are much variations of AV/C command, including over-specifications. A part of documents are applied to the sound devices\cite{avc-general-4-2, avc-audio-1, avc-music-1, avc-descriptor-1, avc-info-block-1, avc-stream-format-1, avc-stream-format-1-1, avc-rate-control}.
 
 \subsection{1394 Open Host Controller Interface}
 \label{ohci-1394}
