@@ -10,7 +10,7 @@
 
 \begin{abstract}
 
-Many sound devices for IEEE 1394 bus have been produced since 2000. To support these devices, ALSA, Linux Sound Subsystem, has Firewire driver stack in kernel-land. But this stack supports just a few devices because of a restriction to transfer outgoing packets with PCM samples. This is not enough for most of devices for music production because these devices require drivers to handle incoming packets for timestamp synchronization, multiplex/demultiplex different types of data to the same packet. Instead of ALSA, FFADO, a project to develop user-land driver, supports many devices. But there is no way to bridge ALSA applications and FFADO directly. In 2014, ALSA firewire stack is enhanced with new drivers to support 70-80 devices, to enable ALSA applications to communicate to them directly. This enhancement was pulled to Linux 3.16.
+Many sound devices connected to IEEE 1394 bus have been produced since 2000. To support these devices, ALSA, Linux Sound Subsystem, has Firewire driver stack in kernel-land. But this stack supports just a few devices because of a restriction to transfer outgoing packets with PCM samples. This is not enough for most of devices for music production because these devices require drivers to handle incoming packets for timestamp synchronization, multiplex/demultiplex different types of data to the same packet. Instead of ALSA, FFADO, a project to develop user-land driver, supports many devices. But there is no way to bridge ALSA applications and FFADO directly. In 2014, ALSA firewire stack is enhanced with new drivers to support 70-80 devices, to enable ALSA applications to communicate to them directly. This enhancement was pulled to Linux 3.16.
 
 \end{abstract}
 
@@ -404,6 +404,8 @@ As described in former subsection, each AMDTP packet delivers 'presentation time
 \label{sec:formation-data-block}
 
 In IEC 61883-6\cite{iec61883-6-1, iec61883-6-2}, a data block represents an event. The data block can include several types of data in each data channel. For example, Multi Bit Linear Audio (MBLA) data channel for PCM samples, MIDI Conformant data channel for MIDI messages and IEC 60958 Conformant data channel for PCM samples. Each model has different number of data channel and its own formation, depending on sampling frequency and a certain modes, even if these models use the same chipset.
+
+For example, Model A, B C use the same device chipset. Model A has 4 MBLA data channels at all of supported sampling rates, Model B has 8 MBLA data channels and 1 MIDI Conformant data channel at 44.1/48.0kHz, but 4 MBLA data channels and 1 MIDI Conformant data channel at 88.2/96.0kHz. Model C has the same formation at each sampling rate as Model B has but in a certain mode Model C has 2 MBLA data channel and 1 MIDI Conformant data channel at 44.1/48.0/88.2/96.0kHz.
 
 The way to get information about the formation depends on each chipset.
 
