@@ -1025,11 +1025,15 @@ These new functionalities help to develop new drivers. Furthermore, existed driv
 
 \subsection{PCM component}
 
-PCM component of each driver has SND\_PCM\_INFO\_BATCH flag because AMDTP functionality updates hw\_ptr (section \ref{sec:alsa-pcm} to page \pageref{sec:alsa-pcm}) for each PCM period. The timing to elapse PCM period depends on OHCI 1394 hardware interrupt (section \ref{sec:enhancement-amdtp} to page \pageref{sec:enhancement-amdtp}). PCM component also has SND\_PCM\_INFO\_BLOCK\_TRANSFER flag because PCM frames are transferred at each interrupt by the number of data blocks in some packets \footnote{QUEUE\_LENGTH in /sound/firewire/amdtp.c}.
+An instance of PCM component in each driver has SND\_PCM\_INFO\_BATCH flag because AMDTP functionality updates hw\_ptr (section \ref{sec:alsa-pcm} to page \pageref{sec:alsa-pcm}) for each PCM period. The timing to elapse PCM period depends on OHCI 1394 hardware interrupt (section \ref{sec:enhancement-amdtp} to page \pageref{sec:enhancement-amdtp}). PCM component also has SND\_PCM\_INFO\_BLOCK\_TRANSFER flag because PCM frames are transferred at each interrupt by the number of data blocks in some packets \footnote{QUEUE\_LENGTH in /sound/firewire/amdtp.c}.
 
 PCM frames are copied to each data blocks in its order and the position of PCM frames in a data block is linear, thus SNDRV\_PCM\_INFO\_INTERLEAVED should be used. If devices supports both streams, in most case, incoming/outgoing AMDTP streams should be the same sampling rate, thus SNDRV\_PCM\_INFO\_JOINT\_DUPLEX should be used. Each drivers should restrict sampling rate for both playback/capture as the same. If current source of clock is not internal or recovered clock (section \ref{sec:clock-recovery} to page \pageref{sec:clock-recovery}), the sampling rate should not be changed.
 
 Currently, SNDRV\_PCM\_HW\_PARAMS\_NO\_PERIOD\_WAKEUP is not used because these drivers have a possibility to stop streaming suddenly due to failure of packet queueing or detection of packet discontinuity. In this case, process with the flag is kept blocking.
+
+The number of channels in each PCM substream depends on the number of MBLA data channels in data block of AMDTP packet. The number is different depending on models even if the models use the same device chipset (Section \ref{sec:formation-data-block} to page \pageref{sec:formation-data-block}).
+
+Fireworks/BeBoB/OXFW/Dice ignores labels of AM824 data, thus each drivers handle IEC 60958 Conformant data channel as MBLA data channel for simple implementation\footnote{[alsa-devel] [PATCH] firewire-lib: Use IEC 61883-6 compliant labels for Raw Audio data http://mailman.alsa-project.org/pipermail/alsa-devel/2014-June/077326.html}.
 
 \subsection{MIDI component}
 
