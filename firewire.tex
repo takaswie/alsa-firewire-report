@@ -371,7 +371,7 @@ The receivers can use this pulse for an reference of Phase Lock Loop circuit. Th
 
 Most devices for production have several ports for analog/digital audio input/output. Such devices have DSP to process several signals from/to the ports for internal mixing. This is 'zero latency hardware monitoring', which each vendor insists.
 
-In the DSP side, outgoing packet is a sink of audio signals and incoming packet is a source of audio signals. The DSP is between IEC 61883-1/6 layer and DAC/ADC for audio ports.
+In the DSP side, outgoing packet is a sink of audio signals and incoming packet is a source of audio signals. The DSP is between IEC 61883-1/6 layer and DAC/ADC for audio ports, therefore a device generates no sound when DSP has no settings of routing between sinks and sources.
 
 The way to control the DSP behaviour depends on each chipset or model.
 
