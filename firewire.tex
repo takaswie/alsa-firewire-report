@@ -879,13 +879,6 @@ This module gives a structure for AMDTP outgoing stream and some operations to h
 
 Drivers can start the stream by amdtp\_out\_stream\_start(). Then amdtp\_out\_stream\_stop() is used to stop the stream. To release the stream, amdtp\_out\_destroy\_stream() is used. When bus reset occurs, amdtp\_out\_stream\_update() is used for new node ID.
 
-\begin{figure}[H]
-	\centering
-	\includegraphics{./img/alsa-amdtp-former.svg.eps}
-	\caption{{Life cycle of an instance for old AMDTP stream}}
-	\label{{lifecycle-old-amdtp-stream}}
-\end{figure}
-
 % TODO
 For PCM component, firewire-lib gives helper functions. During streaming, To set PCM format, amdtp\_out\_stream\_set\_pcm\_format() is used. To initialize PCM-related members of a stream, amdtp\_out\_stream\_pcm\_prepare() is used. When starting/stopping to transfer PCM frames, amdtp\_out\_stream\_pcm\_trigger() is used. To get the numbers of frames in PCM ring buffer, amdtp\_out\_stream\_pcm\_pointer() is used. When killing PCM substreams, amdtp\_out\_stream\_pcm\_abort() is used. To check PCM substream is running or not over an AMDTP stream, amdtp\_out\_stream\_pcm\_running() is used.
 
@@ -960,13 +953,6 @@ The firewire-lib newly supports these functionalities for AMDTP:
 \end{itemize}
 
 This work renames prefix of 'amdtp\_out\_stream' to 'amdtp\_stream' for all of functions and members of AMDTP stream structure, to use the same structure for both directions.
-
-\begin{figure}[htbp]
-	\centering
-	\includegraphics{./img/alsa-amdtp-renew.svg.eps}
-	\caption{{Life cycle of an instance for new AMDTP stream}}
-	\label{{lifecycle-new-amdtp-stream}}
-\end{figure}
 
 This work newly adds a support for AMDTP in stream, and adds an argument for amdtp\_stream\_init(), to indicate the direction of AMDTP stream. After initialized, the instance of stream can be operated by the same way for both direction.
 
