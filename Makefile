@@ -5,6 +5,7 @@ view: firewire.pdf
 
 %.pdf:	%.tex
 	latex $<
+	latex $<
 	dvipdfmx $*
 
 image:
@@ -15,4 +16,5 @@ clean:
 	rm firewire.aux
 	rm firewire.dvi
 	rm firewire.log
+	rm firewire.toc
 	rm firewire.pdf

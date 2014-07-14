@@ -3,6 +3,8 @@
 \usepackage{graphicx, here}
 \begin{document}
 
+\pagenumbering{roman}
+
 \title{Enhancement of ALSA firewire stack}
 \author{Takashi Sakamoto}
 \date{2014/07/10}
@@ -18,6 +20,13 @@ Many sound devices connected to IEEE 1394 bus have been produced since 2000. To 
 
 There are many persons to whom I should thank, but here I describe two developers and three dedicated testers. Clemens Ladisch is a maintainer of ALSA Firewire stack. Without his work for ALSA firewire stack and original Fireworks driver, I might have no interests for this category of device. Moreover, without his comments and reviews for my patches, the patches aren't merged to ALSA upstream. Daniel Wagner is a founder of former FreeBoB project. Without his help, I cannot access to BeBoB related resources and have no opportunity to understand BeBoB behaviours. Darren Anderson, Maximilian Engelhardt and David Henningsson had been patiently tested my drivers with their models. Without their continuous communication, I might have no confidence for my drivers.
 
+\newpage
+
+\tableofcontents
+
+\newpage
+
+\pagenumbering{arabic}
 
 \section{Introduction}
 
@@ -484,11 +493,11 @@ As of 2013, ALSA firewire stack generally supports PCM playback only, while FFAD
 
 \section{Investigation for user-land driver}
 
-In this section, I investigate the way to implement firewire sound device driver for ALSA applications in user-land.
+In this section, I investigate the way to implement firewire sound device driver in user-land for ALSA applications.
 
 \subsection{Requirements for user-land driver}
 
-In modern OS (operating system), each process has an isolated address space, to protect a process from the other processes. OS has a mechanism to allow processes to communicate to each other. This mechanism is Interprocess Communication (IPC). Linux supports some ways for IPC.
+In modern Operating System (OS), each process has an isolated address space, to protect a process from the other processes. OS has a mechanism to allow processes to communicate to each other. This mechanism is Interprocess Communication (IPC). Linux supports some ways for IPC.
 
 IPC is important for firewire sound device driver because of two reasons; AMDTP packets can include several types of data (section \ref{sec:formation-data-block} to page \pageref{sec:formation-data-block}), and duplex streams must be handled for 'presentation time' (section \ref{sec:duplex-streams} to page \pageref{sec:duplex-streams}). When several ALSA applications run for playback and capture PCM samples/MIDI messages, these applications require IPC between a packetization process and application processes.
 
@@ -496,7 +505,7 @@ There are a few possibilities to implement the driver with IPC. They are ALSA PC
 
 \subsection{ALSA implementation in user-land}
 
-Modern CPU (central processing unit) has several modes to restrict software's access to system resources. In Linux, two modes are supported. One is user-mode and another is kernel-mode. In user-mode, software is forbidden to access to hardware resources. Software executes system-call to switch into kernel-mode and access to hardware resources, then the process returns to user-mode.
+Modern Central Processing Unit (CPU) has several modes to restrict software's access to system resources. In Linux, two modes are supported. One is user-mode and another is kernel-mode. In user-mode, software is forbidden to access to hardware resources. Software executes system-call to switch into kernel-mode and access to hardware resources, then the process returns to user-mode.
 
 The resources of sound devices are also hardware resources, therefore ALSA applications should execute system-call to communicate to them. In ALSA, the entry points for system-call is character devices and the system-call is file operations to them. In ALSA, most of file operations are ioctl(2) with unique requests. I think ALSA developers requires more specific operations than simple file operations such like read(2)/write(2).
 
@@ -524,7 +533,7 @@ In this list, the format after 'C' shows the number of card and the format after
 
 In this section, I describe PCM interface only. ALSA PCM interface is used to transmit/receive PCM samples between application and device. The unit of transfer is called 'frame'. It means that PCM samples with the same timing, thus equals to the number of channels in the PCM substream. Most of functions returns the number of frames, instead of the number of bytes.
 
-The basic design of ALSA PCM interface is PCM handle. When starting operations, ALSA application open the handle to one of PCM nodes. The PCM nodes are added to ALSA runtime according to configuration to extends functionality and features of PCM node. ALSA runtime configuration has settings of PCM nodes. In most case, the settings are corresponding to PCM plugins with hierarchical relationships between master and slave. When ALSA applications access to a master PCM node, the plugin works and transfer PCM frames between master buffer and slave buffer, then the frames reaches hw PCM plugin and directly communicate to an kernel-land driver. This mechanism allows PCM runtime to have 'plugin-chain' according to its configuration. 
+When starting operations, ALSA application open the handle to one of PCM nodes. The PCM nodes are added to ALSA runtime according to configuration to extends functionality and features of PCM node. ALSA runtime configuration has settings of PCM nodes. In most case, the settings are corresponding to PCM plugins with hierarchical relationships between master and slave. When ALSA applications access to a master PCM node, the plugin works and transfer PCM frames between master buffer and slave buffer, then the frames reaches hw PCM plugin and directly communicate to an kernel-land driver. This mechanism allows PCM runtime to have 'plugin-chain' according to its configuration. 
 
 \begin{figure}[htbp]
 	\centering
@@ -570,7 +579,7 @@ plughw:CARD=Intel,DEV=0
 \end{figure}
 
 \subsection{ALSA PCM plugins}
-ALSA library has PCM plugins for several purpose\footnote{src/pcm/ in alsa-lib} and dmix/dsnoop plugins are good samples for IPC mechanism. The dmix plugin multiplexes PCM frames from several applications and transfer the PCM samples to device. The dsnoop plugin delivers PCM frames from device to several applications. The dmix/dsnoop plugins use System V Shared Memory for IPC, System V Semaphore for mutual exclusive. ALSA PCM direct layer gives helper functions to these plugins.
+ALSA library has PCM plugins for several purpose\footnote{src/pcm/ in alsa-lib} and dmix/dsnoop plugins are good samples for IPC in ALSA. The dmix plugin multiplexes PCM frames from several applications and transfer the PCM samples to device. The dsnoop plugin delivers PCM frames from device to several applications. The dmix/dsnoop plugins use System V Shared Memory for IPC, System V Semaphore for mutual exclusive. ALSA PCM direct layer gives helper functions to these plugins.
 
 \begin{figure}[htbp]
 	\centering
@@ -879,7 +888,6 @@ This module gives a structure for AMDTP outgoing stream and some operations to h
 
 Drivers can start the stream by amdtp\_out\_stream\_start(). Then amdtp\_out\_stream\_stop() is used to stop the stream. To release the stream, amdtp\_out\_destroy\_stream() is used. When bus reset occurs, amdtp\_out\_stream\_update() is used for new node ID.
 
-% TODO
 For PCM component, firewire-lib gives helper functions. During streaming, To set PCM format, amdtp\_out\_stream\_set\_pcm\_format() is used. To initialize PCM-related members of a stream, amdtp\_out\_stream\_pcm\_prepare() is used. When starting/stopping to transfer PCM frames, amdtp\_out\_stream\_pcm\_trigger() is used. To get the numbers of frames in PCM ring buffer, amdtp\_out\_stream\_pcm\_pointer() is used. When killing PCM substreams, amdtp\_out\_stream\_pcm\_abort() is used. To check PCM substream is running or not over an AMDTP stream, amdtp\_out\_stream\_pcm\_running() is used.
 
 Let's see the detail to generate AMDTP outgoing packets in Figure \ref{fig:packetization-out}. The amdtp\_out\_stream\_start() function queues a series of packet with a 'skip' flag, then firewire-ohci adds the packets into descriptor list. To the end of the series, the function sets 'interrupt' flag. When the 'interrupt' packet is queued, firewire-ohci sets special flag to a descriptor corresponding to the packet. After queueing, the amdtp\_out\_stream\_start() function starts an isochronous context with a callback function. Then firewire-ohci starts to transfer descriptors to OHCI 1394 controller via DMA, and OHCI 1394 controller transmits packets corresponding to the descriptors. When OHCI 1394 controller finish transmitting the 'interrupt' packet, it generates hardware interrupt. The firewire-ohci handles the interrupt and schedules tasklet. When the tasklet is executed in software interrupt context, the callback function is executed. Then snd-firewire-lib generates new series of packets with PCM samples, and queueing them. At the end of packets in the series, the functionality sets the 'interrupt' flag again. When OHCI 1394 controller transmits this packet with 'interrupt', it generates hardware interrupt and snd-firewire-lib generates new series of packets and queues them.
@@ -897,7 +905,7 @@ There is a case that snd-firewire-lib fails to continue streaming. It's to fail 
 
 As of 2013, this functionality doesn't allow drivers to perform as a timing slave. Although a timing slave is required to handle the sequence of value in SYT field from incoming packets to outgoing packets \ref{sec:duplex-streams}, the functionality doesn't support incoming packets. The functionality, therefore, includes the generators of the sequence of value in SYT field and the number of data blocks in each packets because these sequences are relevant to each other. In blocking mode, the number of data blocks is fixed according to SYT\_INTERVAL. In non-blocking mode, it's not a single way to calculate the number of data blocks in each packets\cite{iec61883-6-1, iec61883-6-2}.
 
-\subsection{Requirements for ALSA firewire stack}
+\section{Enhancement of ALSA firewire stack}
 
 As of 2013, this stack is only for outgoing stream (received stream in device side) in both blocking/non-blocking mode. In detail,
 \begin{itemize}
@@ -931,14 +939,9 @@ Furthermore, each driver should prevent from disturbing user-land drivers. Dice 
 \item Locking/Unlocking streaming
 \end{itemize}
 
-Comparing to an idea to implement drivers in user-land, an idea to implement it in kernel-land has less issues of communication to ALSA application because this idea can use ALSA Core. This idea gives good transparency to ALSA applications. Moreover, there's already ALSA firewire stack for firewire drivers. The stack has a lack of some requirements but an enhancement of the stack is less work than implementation in user-land.
+Comparing to an idea to implement drivers in user-land, an idea to implement it in kernel-land has less issues of communication to ALSA application because this idea can use ALSA Core. This idea gives good transparency to ALSA applications. Moreover, there's already ALSA firewire stack for firewire drivers. The stack has a lack of some requirements but an enhancement of the stack is less work than implementing it in user-land.
 
-
-\section{Enhancement of ALSA firewire stack}
-
-I started this work in the beginning of 2013, and it's merged to ALSA upstream May 2014. It takes one and a half years. June 2014, at Linux 3.16 merge window, ALSA maintainer pushed this work into Linux upstream. The patchset for this work consists of 63 patches but 14 patches of them are for correction.
-
-The first 18 patches are for firewire-lib, for AMDTP, CMP and FCP. The next 14 patches are for fireworks driver. The next 16 patches are for bebob driver.
+I started works for it in the beginning of 2013, and it's merged to ALSA upstream May 2014. It takes one and a half years. June 2014, at Linux 3.16 merge window, ALSA maintainer pushed this work into Linux upstream. The patchset for this work consists of 63 patches but 14 patches of them are for correction. The first 18 patches are for firewire-lib, for AMDTP, CMP and FCP. The next 14 patches are for fireworks driver. The next 16 patches are for bebob driver.
 
 \subsection{Enhancement for AMDTP}
 
@@ -1007,9 +1010,13 @@ Additionally, this work adds three AV/C commands, which seems to be used in some
 
 \section{Driver implementation}
 
-These new functionalities help to develop new drivers. Furthermore, existed drivers can be updated for both PCM/MIDI playback/capture.
+The enhancement of ALSA firewire stack allows to implement new drivers and update existed drivers. In this section, I describe about specifications of these drivers.
 
-\subsection{PCM component}
+\subsection{Common specifications}
+
+The drivers for Fireworks/BeBoB/OXFW/Dice utilize ALSA firewire stack, therefore they have common specifications due to the stack for each component.
+
+\subsubsection{PCM component}
 
 An instance of PCM component in each driver has SND\_PCM\_INFO\_BATCH flag because AMDTP functionality updates hw\_ptr (section \ref{sec:alsa-pcm} to page \pageref{sec:alsa-pcm}) for each PCM period. The timing to elapse PCM period depends on OHCI 1394 hardware interrupt (section \ref{sec:enhancement-amdtp} to page \pageref{sec:enhancement-amdtp}). PCM component also has SND\_PCM\_INFO\_BLOCK\_TRANSFER flag because PCM frames are transferred at each interrupt by the number of data blocks in some packets \footnote{QUEUE\_LENGTH in /sound/firewire/amdtp.c}.
 
@@ -1021,12 +1028,12 @@ The number of channels in each PCM substream depends on the number of MBLA data 
 
 Fireworks/BeBoB/OXFW/Dice ignores labels of AM824 data, thus each drivers handle IEC 60958 Conformant data channel as MBLA data channel for simple implementation\footnote{[alsa-devel] [PATCH] firewire-lib: Use IEC 61883-6 compliant labels for Raw Audio data http://mailman.alsa-project.org/pipermail/alsa-devel/2014-June/077326.html}.
 
-\subsection{MIDI component}
+\subsubsection{MIDI component}
 
 MIDI functionality is supported. Most devices have a pair of input/output port but a few devices have several ports. Currently AMDTP functionality supports one MIDI Conformant data channel, thus the maximum number of MIDI ports is restricted by 8.
 
-\subsection{Hwdep component}
-Hwdep functionality is used to the same purpose as Dice driver uses. ALSA applications can execute I/Os to this interface and the API is in include/uapi/sound/firewire.h. The requests are:
+\subsubsection{Hwdep component}
+Hwdep functionality is used to the same purpose as Dice driver uses. ALSA applications can execute I/Os to this interface. The API is in include/uapi/sound/firewire.h. The requests are:
 
 \begin{description}
 \small
@@ -1040,10 +1047,10 @@ This request unlocks the driver's functionality of streaming for user-land drive
 
 Furthermore, ALSA hwdep applications can receive notifications by reading hwdep interface. The notification is a form of union snd\_firewire\_event. Each kind of this union has "type" member in its first field and tells the type of event to ALSA hwdep applications. The event to starting/stopping streaming by drivers are commonly implemented and the other events depend on each driver.
 
-\subsection{Control component}
+\subsubsection{Control component}
 For most devices, the drivers has no control functionality. The expected usage of this functionality is to control device's DSP behaviour (section \ref{sec:internal-mixing} to page \pageref{sec:internal-mixing}). But this can be achieved by user-land implementation. For this purpose, currently, ffado-dbus-server/ffado-mixer are one of recommendations.
 
-\subsection{Proc information}
+\subsubsection{Proc information}
 
 To help debug, the drivers add proc nodes under the card's "firewire" subdirectory. When reporting bugs, users should also reports output from these nodes. These nodes should not be used fot the other purposes.
 
@@ -1089,6 +1096,12 @@ BeBoB driver locates under sound/firewire/bebob/ and consists of 12 files. To ha
 
 BeBoB has a quirk at bus reset. It transmits packets with disorder just after bus reset. To recover from this discontinuity, the driver uses completion to serialize PCM component .prepare() call and firewire subsystem .update() call.
 
+\subsection{OXFW driver}
+
+OXFW driver may be newly added as a successor of firewire-speakers driver. The driver may be move to sound/firewire/oxfw/ and split to 9 files. Originally, firewire-speakers driver supports PCM playback and two models but OXFW driver may support PCM/MIDI playback and capture, and more models.
+
+The firewire-speakers driver supports ALSA control interface for two models, thus OXFW driver may still support this interface for them. But for the other devices, OXFW driver may not give this interface. Ideally, this functionality should be move to user-land.
+
 \subsection{Dice driver}
 
 Dice driver may be moved to sound/firewire/dice/ and split to 9 files. Originally, the driver supports PCM playback but may be extended to PCM/MIDI playback and capture.
@@ -1111,14 +1124,6 @@ struct snd_firewire_event_dice_notification {
 The driver allocate a handler when probing each device. The length of Dice notification is just 4 bytes, therefore, it's reasonable to allocate an address for each device.
 
 Dice has a quirk at bus reset not to react any transactions for reconnection. In this reason, the driver stops any streams at bus reset.
-
-
-\subsection{OXFW driver}
-
-OXFW driver may be newly added as a successor of firewire-speakers driver. The driver may be move to sound/firewire/oxfw/ and split to 9 files. Originally, firewire-speakers driver supports PCM playback and two models but OXFW driver may support PCM/MIDI playback and capture, and more models.
-
-The firewire-speakers driver supports ALSA control interface for two models, thus OXFW driver may still support this interface for them. But for the other devices, OXFW driver may not give this interface. Ideally, this functionality should be move to user-land.
-
 
 \section{Rest of issue}
 
@@ -1276,6 +1281,8 @@ Instead of this type of synchronization, ALSA Firewire stack handle packets from
 
 \begin{thebibliography}{99}
 
+\addcontentsline{toc}{section}{References}
+
 \bibitem{ieee1394-1}
 IEEE 1394-1995 IEEE Standard for a High Performance Serial Bus
 \bibitem{ieee1394-1-a}
@@ -1361,6 +1368,9 @@ http://www.alsa-project.org/main/index.php/ALSA\_Driver\_Documentation
 \newpage
 
 \appendix
+
+\addcontentsline{toc}{section}{Appendices}
+\addtocontents{toc}{\protect\setcounter{tocdepth}{-1}}
 
 \section{Functions of Linux firewire stack}
 
