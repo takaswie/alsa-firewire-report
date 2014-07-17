@@ -7,12 +7,12 @@
 
 \title{Enhancement of ALSA firewire stack}
 \author{Takashi Sakamoto}
-\date{2014/07/10}
+\date{2014/07/17}
 \maketitle{}
 
 \begin{abstract}
 
-Many sound devices connected to IEEE 1394 bus have been produced since 2000. To support these devices, ALSA, Linux Sound Subsystem, has Firewire driver stack in kernel-land. But this stack supports just a few devices because of a restriction to transfer outgoing packets with PCM samples only. This is not enough for most of devices for music production because these devices require drivers to handle incoming packets for timestamp synchronization, multiplex/demultiplex different types of data to the same packet. Instead of ALSA, FFADO, a project to develop user-land driver, supports many devices. But there is no way to bridge ALSA applications and FFADO directly. In 2014, ALSA firewire stack is enhanced with new drivers to support around 80 devices, to enable ALSA applications to communicate them directly. This enhancement was pulled into Linux 3.16.
+Many sound devices connected to IEEE 1394 bus have been produced since 2000. To support these devices, ALSA, Linux Sound Subsystem, has Firewire driver stack in kernel-land. But this stack supports just a few devices because of a restriction to transfer outgoing packets with PCM samples only. This is not enough for most of devices for music production because these devices require drivers to handle incoming packets for timestamp synchronization, multiplex/demultiplex different types of data to the same packet. Instead of ALSA, FFADO, a project to develop user-land driver, supports many devices. But there is no way to bridge ALSA applications and FFADO directly. In 2014, ALSA firewire stack is enhanced with new drivers to support around 80 devices, to enable ALSA applications to communicate the devices directly. This enhancement was pulled into Linux 3.16.
 
 \end{abstract}
 
@@ -358,7 +358,7 @@ Here Fsync is the synchronization clock frequency. STF is the sampling transmiss
 
 \begin{table}[H]
 	\centering
-	\caption{{Sampling transmission frequency}}
+	\caption{{Synchronization clock frequency at each sampling transmission frequency}}
 	\label{fsync}
 	\begin{tabular}{ccc} \toprule
 		STF & SYT\_INTERVAL & Fsync \\ \midrule
@@ -383,6 +383,13 @@ Most devices for production have several ports for analog/digital audio input/ou
 In the DSP side, outgoing packet is a sink of audio signals and incoming packet is a source of audio signals. The DSP is between IEC 61883-1/6 layer and DAC/ADC for audio ports, therefore a device generates no sound when DSP has no settings of routing between sinks and sources.
 
 The way to control the DSP behaviour depends on each chipset or model.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics{./img/dsp-route.svg.eps}
+	\caption{{Signal processing between sources and sinks}}
+	\label{dsp-route}
+\end{figure}
 
 \subsection{Some options for sampling clock source for DSP}
 
@@ -414,6 +421,13 @@ As described in former subsection, each AMDTP packet delivers 'presentation time
 
 In IEC 61883-6\cite{iec61883-6-1, iec61883-6-2}, a data block represents an event. The data block can include several types of data in each data channel. For example, Multi Bit Linear Audio (MBLA) data channel for PCM samples, MIDI Conformant data channel for MIDI messages and IEC 60958 Conformant data channel for PCM samples. Each model has different number of data channel and its own formation, depending on sampling frequency and a certain modes, even if these models use the same chipset.
 
+\begin{figure}[H]
+	\centering
+	\includegraphics{./img/data-block-formation.svg.eps}
+	\caption{{Samples for formations of data blocks in different models with the same device chipset}}
+	\label{dsp-route}
+\end{figure}
+
 For example, Model A, B C use the same device chipset. Model A has 4 MBLA data channels at all of supported sampling rates, Model B has 8 MBLA data channels and 1 MIDI Conformant data channel at 44.1/48.0kHz, but 4 MBLA data channels and 1 MIDI Conformant data channel at 88.2/96.0kHz. Model C has the same formation at each sampling rate as Model B has but in a certain mode Model C has 2 MBLA data channel and 1 MIDI Conformant data channel at 44.1/48.0/88.2/96.0kHz.
 
 The way to get information about the formation depends on each chipset.
@@ -425,7 +439,7 @@ Although there are some common specifications, each device has specific quirks d
 \subsubsection{Fireworks}
 Fireworks is a board module which Echo Audio produced. This module consists of three chipsets: Communication chipset for IEEE 1394 PHY/Link and IEC 61883-1/6 (Texas Instruments iceLynx Micro), DSP or/and FPGA for signal processing, Flash Memory to store firmwares.
 
-For transaction, fireworks uses both of AV/C commands and its own mechanism. Fireworks supports some commands in AV/C General\cite{avc-general-4-2}, AV/C Descriptor mechanism\cite{avc-general-enhancement}. Drivers can also transfer requests to a specific address on a device, and the device transfers responses to a specific address on the controller. By default, 0xecc000000000 is for requests and 0xecc080000000 is for responses. In IEEE 1212, these addresses are in "Memory space" and have no side effects against reading/writing memories. But actually Fireworks transaction has side effects according to unique request/response sets. This transaction is transferred to the addresses, while there's another way to transfer commands and responses in frame of AV/C vendor specific commands.
+For transaction, fireworks uses both of AV/C commands and its own mechanism. Fireworks supports some commands in AV/C General\cite{avc-general-4-2}, AV/C Descriptor mechanism\cite{avc-general-enhancement}. Drivers can also transfer requests to a specific address on a device, and the device transfers responses to a specific address on the controller. By default, 0xecc0'0000'0000 is for requests and 0xecc0'8000'0000 is for responses. In IEEE 1212, these addresses are in "Memory space" and have no side effects against reading/writing memories. But actually Fireworks transaction has side effects according to unique request/response sets. This transaction is transferred to the addresses, while there's another way to transfer commands and responses in frame of AV/C vendor specific commands.
 
 Fireworks manages streams by CMP and transfers AMDTP packets in blocking mode. The streams are not fully compliant to IEC 61883-1. In IEC 61883-1, the value of data block counter means the number of packets which has already transferred, while in Fireworks it means the number of data blocks including current packet. Furthermore, its empty packets are transferred at tag b00 in isochronous packet header. Additionally, Fireworks has more quirks depending on firmware version for iceLynx Micro.
 
