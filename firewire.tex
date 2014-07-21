@@ -7,7 +7,7 @@
 
 \title{Enhancement of ALSA firewire stack}
 \author{Takashi Sakamoto}
-\date{2014/07/17}
+\date{2014/07/21}
 \maketitle{}
 
 \begin{abstract}
@@ -30,27 +30,27 @@ I would like to appreciate many people who help me for this work, especially two
 
 \section{Introduction}
 
-Linux is an operating system widely used on various platform, and its sound subsystem, Advanced Linux Sound Architecture (ALSA) is used on several platform. On PC/AT-compatible platform, there are peoples who has enthusiasms to use Linux for music production. They require sound devices with unique functionality such like internal mixing and synchronization, and some of them (not all of them) prefer to sound devices for IEEE 1394 bus because the devices satisfies their requirement.
+Linux is an operating system widely used on various platform, and its sound subsystem, Advanced Linux Sound Architecture (ALSA) is used on several platforms. On PC/AT-compatible platform, there are peoples who has enthusiasms to use Linux for music production. They require sound devices with unique functionality such like internal mixing and synchronization. Some of them (not all of them) prefer to sound devices connected to IEEE 1394 bus because the devices satisfies their requirement.
 
-But ALSA, itself, has a weak stack to handle the devices. Instead of ALSA, user-land driver satisfies the users. A project to develop the driver is FFADO. FFADO gives a library and API to communicate to the devices. Although there are much ALSA applications, there are less FFADO applications. And there's no way for ALSA applications to use FFADO directly. This means that ALSA applications don't handle most of the sound devices directly.
+But ALSA, itself, has a weak stack to handle the devices. Instead of ALSA, user-land driver satisfies the users. A project to develop the driver is FFADO. FFADO gives a library for applications. This library includes Application Programming Interface (API) to communicate to the devices. Although there are much ALSA applications, there are less FFADO applications. And there's no way for ALSA applications to use FFADO directly. This means that ALSA applications don't handle most of the sound devices directly.
 
-I\footnote{Author} realized this issue in 2009. After investigating, I concluded that enhancement of ALSA firewire stack is a better solution. This report is written to explain the conclusion and my work for this stack.
+I\footnote{Author} realized this issue in 2009. After investigating, I concluded that enhancement of ALSA firewire stack is a better solution. I write this report to explain the conclusion and my work for this stack.
 
 In this report, at first, I review some specifications related to the devices. Next, I describe devices' features. Then I investigate software implementation in user-land and in kernel-land to seek solution. Finally, I explain my work for ALSA firewire stack.
 
 
 \section{Common Specifications}
 
-The sound devices on IEEE 1394 bus use IEC 61883-1/6 for its communication protocol. The main feature of this protocol is packet transmittion for audio and music data. In this section, I review IEEE 1394, IEEE 1212, IEC 61883-1/6 and OHCI 1394 to help understanding of devices' features. This report is not for explanations of specifications, thus I pick up information needed to implement software drivers.
+The sound devices connected to IEEE 1394 bus use IEC 61883-1/6 for its communication protocol. The main feature of this protocol is packet transmittion for audio and music data. In this section, I review IEEE 1394, IEEE 1212, IEC 61883-1/6 and OHCI 1394 to help understanding of devices' features. This report is not for explanations of specifications, thus I pick up information needed to implement software drivers.
 
 \subsection{IEEE 1394 bus}
 
 IEEE 1394 is a serial bus. IEEE published its first standard documents in 1995\cite{ieee1394-1}. Between 2000 and 2006, some supplements were added\cite{ieee1394-1-a, ieee1394-1-b, ieee1394-1-c}. And in 2008, it was updated\cite{ieee1394-2}.
 
-IEEE 1394 bus consists of Physical layer, Link layer, Transaction layer and Serial bus management. Two types of communication is available on the bus, isochronous and asynchronous.
+IEEE 1394 bus consists of Physical layer, Link layer, Transaction layer and Serial bus management. Two types of communication are available on the bus, isochronous and asynchronous.
 
 \subsubsection{Physical layer}
-IEEE 1394 Physical layer defines two types of environment, cable and backplane, however I've never seen the backplane environment. I describe about cable environment. In cable environment, a unique cable and connectors are defined. In this environment, any bus topologies such like tree and star are available. A half duplex communication with arbitration is used. For the communication, analog signal is used for the arbitration. After the arbitration, encoded signal is used for digital data.
+IEEE 1394 Physical layer defines two types of environment, cable and backplane, however I've never seen the backplane environment. I describe about cable environment. In cable environment, unique cables and connectors are defined. In this environment, any bus topologies such like tree and star are available. A half duplex communication with arbitration is used. For the communication, analog signal is used for the arbitration. After the arbitration, encoded signal is used for digital data.
 
 
 \subsubsection{Link layer}
@@ -58,7 +58,7 @@ IEEE 1394 Link layer defines the way to control isochronous cycle, to receive or
 
 
 \subsubsection{Transaction layer}
-IEEE 1394 Transaction layer defines the way to control nodes over the same bus. This layer use IEEE 1212 for addressing of nodes and the types of transaction.
+IEEE 1394 Transaction layer defines the way to control nodes over the same bus. This layer uses IEEE 1212 for addressing of nodes and the types of transaction.
 
 \subsubsection{Serial bus management}
 IEEE 1394 Serial bus management defines the way to manage bus topology, transmission and resources for isochronous communication. This layer works with the other layers.
@@ -89,9 +89,9 @@ IEEE 1394 isochronous communication guarantees to transfer packets at 8,000 time
 \label{fig:iso-packet}
 \end{figure}
 
-In Figure \ref{fig:iso-packet}, data length: the length of data field, tag: the data format of isochronous packet, channel: the channel number for this packet, tcode: the packet format, sy: application specific control field.
+In Figure \ref{fig:iso-packet}, data length: the length of data field, tag: the packet format, channel: the channel number for this packet, tcode: the data format of isochronous packet, sy: application specific control field.
 
-The value of tag field is usually b1010, and the value of tcode field is usually b01 for Common Isochronous Packet(CIP)\cite{iec61883-1-3}, 
+The value of tcode field is usually b1010, the value of tag field is usually b01 for Common Isochronous Packet(CIP)\cite{iec61883-1-3}, 
 
 \subsubsection{Asynchronous communication}
 IEEE 1394 asynchronous communication has no guarantees for delay. The packet can be fragmented. IEEE 1394 transaction layer handles this types of communication. There are two types of transaction, quadlet and block.
@@ -164,7 +164,7 @@ This data transmission is controlled with an idea of 'connection'. The connectio
 
 The connection is controlled by Connection Management Procedure (CMP). In CMP, some fields in PCR can be changed by lock transaction to establish/break connections.
 
-The functionality on each node can be controlled by Function Control Protocol (FCP). FCP consists of a pair of transaction for command and response. The address for command is 0xFFFF'F000'0B00 and the address for response is 0xFFFF'F000'D00. The length of data for each transaction is limited by 512 bytes.
+The functionality on each node can be controlled by Function Control Protocol (FCP). FCP consists of a pair of transaction for command and response. The address for command is 0xFFFF'F000'0B00 and the address for response is 0xFFFF'F000'0D00. The length of data for each transaction is limited by 512 bytes.
 
 
 \subsection{IEC 61883-6}
@@ -207,15 +207,15 @@ IEC 61883-1\cite{iec61883-1-1, iec61883-1-2, iec61883-1-3} allows any variations
 \label{fig:amdtp-cip}
 \end{figure}
 
-In Figure \ref{fig:amdtp-cip}, SID: the node ID for transmitter, DBS: the number of quadlets for data blocks, DBC: the number of data blocks which has already transferred, FMT: format ID and 0x10 in AMDTP, FDF: format dependent field, SYT: the offset from isochronous cycle timer.
+In Figure \ref{fig:amdtp-cip}, SID: the node ID for transmitter, DBS: the number of quadlets for data blocks, DBC: the number of data blocks which has already transferred, FMT: format ID, FDF: format dependent field, SYT: the offset from isochronous cycle timer.
 
 The value of DBC field is used to detect packet lost. In AMDTP, the value of FMT is 0x10, and FDF field consists of 'Event Type' field and 'Sampling Frequency Code' field described later. On the other hand, 0xff in FDF field is No data code to indicate packet without any data. In AMDTP, the value of SYT field is used to show 'presentation time'. In detail, Section \ref{sec:clock-recovery} to page \pageref{sec:clock-recovery}.
 
-After CIP headers, some data blocks follows. In AMDTP, one data block represents an event. IEC 61883-6\cite{iec61883-6-1, iec61883-6-2} doesn't define meaning of the event, although the event may be a batch of data accompanied with the same timing. There are some ways to describe the data, although AM824 is mostly used.
+After CIP headers, some data blocks follows. In AMDTP, one data block represents an event. IEC 61883-6\cite{iec61883-6-1, iec61883-6-2} doesn't define meaning of the event, although the event may be a batch of data accompanied with the same timing. There are some ways to describe the data. AM824 is mostly used.
 
-AM824 represents data by 32bit field that has an 8bit label and 24bit data field\cite{iec61883-6-2}. In IEC 61883-6:2002\cite{iec61883-6-1}, AM824 can describe three types of data, IEC 60958 Conformant, Raw Audio and MIDI Conformant. In IEC 61883-6:2005\cite{iec61883-6-2}, Raw Audio is renamed as Multi Bit Linear Audio and some data types are newly supported.
+AM824 represents data by 32bit field that has an 8bit label and 24bit data field. In IEC 61883-6:2002\cite{iec61883-6-1}, AM824 can describe three types of data, IEC 60958 Conformant, Raw Audio and MIDI Conformant. In IEC 61883-6:2005\cite{iec61883-6-2}, Raw Audio is renamed as Multi Bit Linear Audio (MBLA) and some data types are newly supported.
 
-As described before, the event is accompanied with timing because the event is real time data for audio and music. As a result, AMDTP is dominated by sampling frequency. The sampling frequency and the type of event is shown in FDF field of CIP header. The 4bit in the most significant bit is EVT field to show the way to describe the data, and the lower 3bit of 4bit in the least significant bit is SFC to show nominal sampling frequency. The rest 1bit is N-flag. This flag is used to show the mode of rate control. When this flag does not stand, it means clock based rate control, described in Section \ref{sec:clock-recovery} to page\pageref{sec:clock-recovery}. Else, it means command based rate control\cite{iec61883-6-2, avc-rate-control}. For AM824, the value of EVT field is b00. The values of SFC field is shown at Table \ref{tbl:sfc-fdf}. For most of sound devices, N-flag doesn't stand.
+The event is for audio and music, therefore AMDTP is dominated by sampling frequency. FDF field of CIP header indicates the sampling frequency and the type of event. The 4bit in the most significant bit is EVT field to show the way to describe the data of event, and the lower 3bit of 4bit in the least significant bit is SFC to show nominal sampling frequency. The rest 1bit is N-flag. This flag is used to show the mode of rate control. When this flag does not stand, it means clock based rate control, described in Section \ref{sec:clock-recovery} to page\pageref{sec:clock-recovery}. Else, it means command based rate control\cite{iec61883-6-2, avc-rate-control}. For AM824, the value of EVT field is b0000. The values of SFC field is shown at Table \ref{tbl:sfc-fdf}. For most of sound devices, N-flag doesn't stand.
 
 \begin{figure}[H]
 \centering
@@ -245,11 +245,11 @@ As described before, the event is accompanied with timing because the event is r
 	\end{tabular}
 \end{table}
 
-For detail to transfer the packet, see Section \ref{sec:clock-recovery} to page \pageref{sec:clock-recovery}.
+For detail of the way to transfer packets, see Section \ref{sec:clock-recovery} to page \pageref{sec:clock-recovery}.
 
 \subsection{AV/C commands}
 
-IEC 61883 series, itself, came from documents which 1394 Trade Association (1394TA) published. Especially, actual application of FCP is not in public documents and in 1394TA documents. The application is called as 'AV/C commands'. There are much variations of AV/C command, including over-specifications. A part of documents are applied to the sound devices\cite{avc-general-4-2, avc-audio-1, avc-connection-1, avc-music-1, avc-descriptor-1, avc-info-block-1, avc-stream-format-1, avc-stream-format-1-1, avc-rate-control}.
+IEC 61883 series came from documents which 1394 Trade Association (1394TA) published. Especially, actual application of FCP is in 1394TA documents and not in any public documents. In 1394TA documents. The application is called as 'AV/C commands'. There are much variations of AV/C command, including over-specifications. A part of documents are applied to the sound devices\cite{avc-general-4-2, avc-audio-1, avc-connection-1, avc-music-1, avc-descriptor-1, avc-info-block-1, avc-stream-format-1, avc-stream-format-1-1, avc-rate-control}.
 
 \subsection{1394 Open Host Controller Interface}
 \label{ohci-1394}
@@ -258,11 +258,11 @@ IEC 61883 series, itself, came from documents which 1394 Trade Association (1394
 
 OHCI 1394 is a document for host controller implementation for IEEE 1394 bus. The implementation includes link and transaction layer. OHCI 1394 describes software interface with register, interrupt and Direct Media Access (DMA). For PC/AT-compatible platform, OHCI 1394 is implemented as card devices on PCI/PCI-Express bus.
 
-OHCI 1394 represents both of asynchronous and isochronous communication as context, which includes a list of descriptor. A descriptor includes information for a packet of each communications. The information includes an address for DMA buffer. The data for the buffer is transferred between system and controller device by DMA. After transferring, interrupts are generated according to information in the descriptor. The minimum number of isochronous context is 4 and the maximum is 32, for one direction.
+OHCI 1394 represents both of asynchronous and isochronous communication as context, which includes a list of descriptor. A descriptor includes information for a packet of each communications. The information includes an address for DMA buffer. The data in DMA buffer is transferred between system and controller device by DMA. After transferring, interrupts are generated according to information in the descriptor. The minimum number of isochronous context is 4 and the maximum is 32, for one direction.
 
 \section{Device features}
 
-The sound devices for production have unique features. In this section, I describe such features to consider software implementation.
+The sound devices for music production have unique features. In this section, I describe such features to consider software implementation.
 
 \subsection{Clock recovery}
 \label{sec:clock-recovery}
@@ -285,7 +285,7 @@ In IEEE 1394\cite{ieee1394-2}, isochronous-capable nodes should have 32bit CYCLE
 
 In usual implementation, the register count up according to 24.576MHz clock given by IEEE 1394 Link layer chipset.
 
-When the cycle\_offset field rolls over, cycle master node broadcasts a cycle-start packet after arbitration. A cycle\_time field in this packet includes the value of CYCLE\_TIMER register. After receiving cycle-start packet, transmitters and receivers update their CYCLE\_TIMER register with the value. As a result, the transmitters and receivers can maintain local time reference to cycle master. Then transmitters start arbitration and transmit an isochronous packet with a certain channel and the receivers receive isochronous packet with a favorite channel. Actual intervals between the cycle-start packets are different depending on arbitrations of cycle master, see Figure \ref{cycle-start}.
+When the cycle\_offset field rolls over, cycle master node broadcasts a cycle-start packet after arbitration. This packet has a cycle\_time field. The cycle\_time field includes the value of CYCLE\_TIMER register. After receiving cycle-start packet, transmitters and receivers update their CYCLE\_TIMER register with the value. As a result, the transmitters and receivers can maintain local time reference to cycle master. Then transmitters start arbitration and transmit an isochronous packet with a certain channel and the receivers receive isochronous packet with a favorite channel. Actual intervals between the cycle-start packets are different depending on bandwidth usage, see Figure \ref{cycle-start}.
 
 \begin{figure}[htbp]
 \centering
@@ -294,9 +294,9 @@ When the cycle\_offset field rolls over, cycle master node broadcasts a cycle-st
 \label{cycle-start}
 \end{figure}
 
-IEC 61883-1 defines SYT field in CIP header. In IEC 61883-6, this field is used to calculate 'presentation time'. The 'presentation time' represents the timestamp for a certain event in a packet. The transmitter calculates offset from local isochronous cycle reference as the timing of sampling clock, then transfers the value in SYT field of a packet. The receivers calculate 'presentation time' with the value of SYT field in the packet and local isochronous cycle reference.
+IEC 61883-1 defines SYT field in CIP header (see Figure \ref{fig:amdtp-cip} to page \pageref{fig:amdtp-cip}). In IEC 61883-6, this field is used to calculate 'presentation time'. The 'presentation time' represents the timestamp for a certain event in a packet. The transmitter calculates offset for the timing of sampling clock from local isochronous cycle reference, then transfers the value in SYT field of a packet. The receivers calculate 'presentation time' with the value of SYT field in the packet and local isochronous cycle reference.
 
-One packet has one SYT field in its CIP header, while one packet can include several events. As a result, all of events cannot have 'presentation time'. The interval between events corresponding to 'presentation time' is defined as SYT\_INTERVAL.
+One packet has one SYT field in its CIP header, while one packet can include several data blocks. All of data blocks cannot have 'presentation time'. The interval between data blocks with 'presentation time' is defined as SYT\_INTERVAL.
 
 \begin{table}[ht]
 	\centering
@@ -314,11 +314,11 @@ One packet has one SYT field in its CIP header, while one packet can include sev
 	\end{tabular}
 \end{table}
 
-If there's a packet which includes no event with 'presentation time', the value of SYT is 'No Information' code (0xffff). It's different to decide the event with 'presentation time', depending on transferring method.
+If there's a packet which includes no data blocks with 'presentation time', the value of SYT is 'No Information' code (0xffff). It's different to decide the data block with 'presentation time', depending on mode to transfer packets.
 
-In IEC 61883-6\cite{iec61883-6-1,iec61883-6-2}, there are two methods for transferring packets; blocking and non-blocking. The differences between these two methods are transfer delay and the number of events which a packet can includes.
+In IEC 61883-6\cite{iec61883-6-1,iec61883-6-2}, there are two modes to transfer packets; blocking and non-blocking. The differences between these two modes are transfer-delay and the number of events which a packet can includes.
 
-In blocking mode, the number of event in an packet is fixed to the value of SYT\_INTERVAL, and 'presentation time' is for the first event in a packet. A transmitter must wait until all of samples in a packet are sampled, therefore the transfer delay is larger than default value by one packet.
+In blocking mode, the number of event in an packet is fixed to the value of SYT\_INTERVAL, thus 'presentation time' is for the first data block in a packet. A transmitter must wait until all of samples in a packet are sampled, therefore the transfer delay is larger than default value by one packet.
 
 \begin{figure}[H]
 	\centering
@@ -327,7 +327,7 @@ In blocking mode, the number of event in an packet is fixed to the value of SYT\
 	\label{amdtp-blocking}
 \end{figure}
 
-In non-blocking mode, a packet can include different numbers of events. The transmitter can transfer packets according to nominal isochronous cycle without waiting for fixed numbers of event. The transfer delay equals to default value. But it's more complicated to decide which event is accompanied by 'presentation timestamp' in a packet.
+In non-blocking mode, a packet can include different number of events. The transmitter can transfer packets according to nominal isochronous cycle without waiting for fixed numbers of event. The transfer delay equals to default value, while it's more complicated to decide which data block is accompanied by 'presentation timestamp' of a packet.
 
 \begin{figure}[H]
 	\centering
@@ -336,25 +336,25 @@ In non-blocking mode, a packet can include different numbers of events. The tran
 	\label{amdtp-nonblockingstart}
 \end{figure}
 
-A transmitter decides an event accompanied by 'presentation time' in this condition:
+A transmitter decides a data block with 'presentation time' in this condition:
 
 \begin{equation}
 	mod(DBC, SYT\_INTERVAL) = 0
 \end{equation}
 
-Then receivers calculates an index for the event according to this formula:
+Then receivers calculates an index of data block with 'presentation timestamp' according to this formula:
 
 \begin{equation}
 	index = mod((SYT\_INTERVAL - mod(DBC, SYT\_INTERVAL)), SYT\_INTERVAL)
 \end{equation}
 
-This is a mechanism of 'presentation time'. The receivers can generate 'synchronization clock frequency' to use the sequence of SYT field and the local time reference maintained by cycle\_start packet in each isochronous cycle, according to this formula.
+In both modes, the receivers can generate 'synchronization clock frequency' to use the sequence of SYT field and the local time reference, according to this formula.
 
 \begin{equation}
 	Fsync = STF / SYT\_INTERVAL < 8,000
 \end{equation}
 
-Here Fsync is the synchronization clock frequency. STF is the sampling transmission frequency, equal to sampling clock frequency.
+Here Fsync is the synchronization clock frequency. STF is the sampling transmission frequency, equals to sampling clock frequency.
 
 \begin{table}[H]
 	\centering
@@ -372,13 +372,13 @@ Here Fsync is the synchronization clock frequency. STF is the sampling transmiss
 	\end{tabular}
 \end{table}
 
-The receivers can use this pulse for an reference of Phase Lock Loop circuit. This is a mechanism of 'clock recovery'. For an example of actual implementation, see\cite{icelynx}.
+The receivers can use the pulse of this frequency for an reference of phase lock loop (PLL) circuit. This is a mechanism of 'clock recovery'. For an example of actual implementation, see\cite{icelynx}.
 
 
 \subsection{Signal processing for internal mixing}
 \label{sec:internal-mixing}
 
-Most devices for production have several ports for analog/digital audio input/output. Such devices have DSP to process several signals from/to the ports for internal mixing. This is 'zero latency hardware monitoring', which each vendor insists.
+Most devices for music production have several ports for analog/digital audio input/output. Such devices have DSP to process signals from/to the ports for internal mixing. This is 'zero latency hardware monitoring', which each vendor insists.
 
 In the DSP side, outgoing packet is a sink of audio signals and incoming packet is a source of audio signals. The DSP is between IEC 61883-1/6 layer and DAC/ADC for audio ports, therefore a device generates no sound when DSP has no settings of routing between sinks and sources.
 
@@ -393,7 +393,7 @@ The way to control the DSP behaviour depends on each chipset or model.
 
 \subsection{Some options for sampling clock source for DSP}
 
-Most devices for production have several options for source of clock. The source is used for input clock of DSP. The options are:
+Most devices for music production have several options for source of clock. The source is used for input clock of DSP. The options are:
 \begin{itemize}
 	\item Signal from internal clock source
 	\item Signal from input of S/PDIF, ADAT or Word Clock
@@ -401,7 +401,7 @@ Most devices for production have several options for source of clock. The source
 	\item Signal of recovered clock as described in previous subsection (4.0/5.512/6.0kHz)
 \end{itemize}
 
-The way to change or check current source of clock depends on each chipset or mode. When an external source is selected, sampling rate should be fixed according to the signal from an external source.
+The way to change or check current source of clock depends on each device chipset. When an external source is selected, sampling rate should be fixed according to the signal from an external source.
 
 \subsection{Duplex streams with timestamp synchronization}
 \label{sec:duplex-streams}
@@ -419,7 +419,7 @@ As described in former subsection, each AMDTP packet delivers 'presentation time
 \subsection{Different formation of data channel in a data block of packet}
 \label{sec:formation-data-block}
 
-In IEC 61883-6\cite{iec61883-6-1, iec61883-6-2}, a data block represents an event. The data block can include several types of data in each data channel. For example, Multi Bit Linear Audio (MBLA) data channel for PCM samples, MIDI Conformant data channel for MIDI messages and IEC 60958 Conformant data channel for PCM samples. Each model has different number of data channel and its own formation, depending on sampling frequency and a certain modes, even if these models use the same chipset.
+In IEC 61883-6\cite{iec61883-6-1, iec61883-6-2}, a data block can include several types of data in each data channel. For example, MBLA data channel for PCM samples, MIDI Conformant data channel for MIDI messages and IEC 60958 Conformant data channel for PCM samples. Each model has different number of data channel and specific formation of data channels, depending on sampling frequency and a certain modes, even if these models use the same chipset.
 
 \begin{figure}[H]
 	\centering
@@ -428,7 +428,7 @@ In IEC 61883-6\cite{iec61883-6-1, iec61883-6-2}, a data block represents an even
 	\label{dsp-route}
 \end{figure}
 
-For example, Model A, B C use the same device chipset. Model A has 4 MBLA data channels at all of supported sampling rates, Model B has 8 MBLA data channels and 1 MIDI Conformant data channel at 44.1/48.0kHz, but 4 MBLA data channels and 1 MIDI Conformant data channel at 88.2/96.0kHz. Model C has the same formation at each sampling rate as Model B has but in a certain mode Model C has 2 MBLA data channel and 1 MIDI Conformant data channel at 44.1/48.0/88.2/96.0kHz.
+For example, Model A, B, C use the same device chipset. Model A has 4 MBLA data channels at all of supported sampling rates, Model B has 8 MBLA data channels and 1 MIDI Conformant data channel at 44.1/48.0kHz, but 4 MBLA data channels and 1 MIDI Conformant data channel at 88.2/96.0kHz. Model C has the same formation at each sampling rate as Model B has, while in a certain mode Model C has 2 MBLA data channel and 1 MIDI Conformant data channel at 44.1/48.0/88.2/96.0kHz.
 
 The way to get information about the formation depends on each chipset.
 
@@ -437,9 +437,9 @@ The way to get information about the formation depends on each chipset.
 Although there are some common specifications, each device has specific quirks due to chipset or vendor's customization. Especially, the way to control DSP is largely different. Currently quirks of four chipsets are clear.
 
 \subsubsection{Fireworks}
-Fireworks is a board module which Echo Audio produced. This module consists of three chipsets: Communication chipset for IEEE 1394 PHY/Link and IEC 61883-1/6 (Texas Instruments iceLynx Micro), DSP or/and FPGA for signal processing, Flash Memory to store firmwares.
+Fireworks is a board module which Echo Audio produced. This module consists of three chipsets; Communication chipset for IEEE 1394 PHY/Link and IEC 61883-1/6 (Texas Instruments iceLynx Micro), DSP or/and FPGA for signal processing, flash Memory to store firmwares.
 
-For transaction, fireworks uses both of AV/C commands and its own mechanism. Fireworks supports some commands in AV/C General\cite{avc-general-4-2}, AV/C Descriptor mechanism\cite{avc-general-enhancement}. Drivers can also transfer requests to a specific address on a device, and the device transfers responses to a specific address on the controller. By default, 0xecc0'0000'0000 is for requests and 0xecc0'8000'0000 is for responses. In IEEE 1212, these addresses are in "Memory space" and have no side effects against reading/writing memories. But actually Fireworks transaction has side effects according to unique request/response sets. This transaction is transferred to the addresses, while there's another way to transfer commands and responses in frame of AV/C vendor specific commands.
+For transaction, fireworks uses both of AV/C commands and specific mechanism. Fireworks supports some commands in AV/C General\cite{avc-general-4-2}, AV/C Descriptor mechanism\cite{avc-general-enhancement}. Drivers can also transfer requests to a specific address on a device, and the device transfers responses to a specific address on the controller. By default, 0xecc0'0000'0000 is for requests and 0xecc0'8000'0000 is for responses. In IEEE 1212, these addresses are in "Memory space" and have no side effects against reading/writing memories. But actually Fireworks transaction has side effects according to unique request/response sets. This transaction is transferred to the addresses, while there's another way to transfer requests and responses in frame of AV/C vendor specific commands.
 
 Fireworks manages streams by CMP and transfers AMDTP packets in blocking mode. The streams are not fully compliant to IEC 61883-1. In IEC 61883-1, the value of data block counter means the number of packets which has already transferred, while in Fireworks it means the number of data blocks including current packet. Furthermore, its empty packets are transferred at tag b00 in isochronous packet header. Additionally, Fireworks has more quirks depending on firmware version for iceLynx Micro.
 
@@ -449,7 +449,7 @@ BeBoB is 'BridgeCo enhanced Breakout Box'. This is installed to firewire devices
 
 BeBoB uses CMP to maintain AMDTP streams but some BeBoB based devices need both connections to transmit AMDTP stream. BeBoB transfers AMDTP packets in blocking mode.
 
-BeBoB supports AV/C General command\cite{avc-general-4-2}, AV/C Audio Subunit command\cite{avc-audio-1}, AV/C Music Subunit command\cite{avc-music-1} and AV/C Descriptor Mechanism\cite{avc-general-enhancement}. Furthermore, BeBoB uses its own extension of AV/C commands\cite{bebob-1, bebob-2}. But BeBoB can be customized largely, therefore there are some model specific operations. Some models use no AV/C commands.
+BeBoB supports some commands in AV/C General\cite{avc-general-4-2}, AV/C Audio Subunit\cite{avc-audio-1}, AV/C Music Subunit\cite{avc-music-1} and AV/C Descriptor mechanism\cite{avc-general-enhancement}. Additionally, BeBoB uses its own extension of AV/C commands\cite{bebob-1, bebob-2}. Furthermore, BeBoB can be customized largely, therefore there are some model specific operations. Especially, some models use no AV/C commands.
 
 
 \subsubsection{OXFW970/971}
@@ -472,7 +472,7 @@ Dice transfers AMDTP packets in blocking mode. But Dice is not fully compliant t
 In previous section, I describe device features and chipset quirks. In this section, let's see current implementation for them.
 
 \subsection{FFADO}
-FFADO is a project to develop user-land drivers for firewire sound devicesfootnote{http://ffado.org/}. FreeBoB is a ancestral project of FFADO and Daniel Wagner started this project for BeBoB driver in 2004. Daniel was in BridgeCo AG and had a contract to disclose relevant resources to the other developers. Later, Peter Palmer joined. The code base of FreeBoB grew up by them. In 2006, Jonathan Woithe joined in this project. He worked for drivers for MOTU devices. In 2007, to support more devices, FFADO project began.
+FFADO is a project to develop user-land drivers for firewire sound devices\footnote{http://ffado.org/}. FreeBoB is an ancestral project of FFADO and Daniel Wagner started this project for BeBoB driver in 2004. Daniel was in BridgeCo AG and had a contract to disclose relevant resources to the other developers. Later, Peter Palmer joined. The code base of FreeBoB grew up by them. In 2006, Jonathan Woithe joined in this project. He worked to develop drivers for MOTU devices. In 2007, to support more devices, FFADO project began.
 
 As of 2014, FFADO supports:
 \begin{itemize}
@@ -489,7 +489,7 @@ FFADO gives a library, 'libffado'. This library uses 'libraw1394' to execute I/O
 
 FFADO also gives a daemon, 'ffado-dbus-server' as a FFADO application. As the name shows, this daemon uses D-Bus interfaces so that the other applications to control device's internal mixer. Currently there are no applications to use this interface except for 'ffado-mixer', which gives GUI with Qt4.
 
-Currently, there is no FFADO application except for 'ffado-dbus-server' and JACK \footnote{http://jackaudio.org/} server daemon (jackd). The jackd uses libffado to transfer AMDTP packets to/from devices. The jackd uses UNIX domain socket and System V Shared Memory to gather/distribute data to/from JACK application processes. 
+Currently, there is no FFADO applications except for 'ffado-dbus-server' and JACK \footnote{http://jackaudio.org/} server daemon (jackd). The jackd uses libffado to transfer AMDTP packets to/from devices. The jackd uses UNIX domain socket and System V Shared Memory to gather/distribute data to/from JACK application processes. 
 
 \begin{figure}[H]
 	\centering
@@ -500,7 +500,7 @@ Currently, there is no FFADO application except for 'ffado-dbus-server' and JACK
 
 
 \subsection{ALSA Firewire stack}
-There are no actions till 2010 to support firewire sound devices. An ALSA developer, Clemens Ladisch, started his work for ALSA firewire stack in 2010. In 2011, some stuffs were merged to ALSA upstream. This is a beginning of ALSA Firewire stack. In this time, 'snd-firewire-speakers' was committed for two models of OXFW970/971 based devices. In 2012, 'snd-scs1x' was committed as MIDI only driver for Stanton SC System 1\footnote{This model has its own way to transmit/receive MIDI messages.}. In 2013, 'snd-dice' was committed as playback only driver for Dice based devices.
+There are no actions till 2010 to support firewire sound devices. An ALSA developer, Clemens Ladisch, started his work for ALSA firewire stack in 2010. In 2011, some stuffs were merged into ALSA upstream. This is a beginning of ALSA Firewire stack. In this time, 'snd-firewire-speakers' was committed for two models of OXFW970/971 based devices. In 2012, 'snd-scs1x' was committed as MIDI only driver for Stanton SC System 1\footnote{This model has its own way to transmit/receive MIDI messages.}. In 2013, 'snd-dice' was committed as playback only driver for Dice based devices.
 
 As of 2013, ALSA firewire stack generally supports PCM playback only, while FFADO supports more functionality. If there are some ways for ALSA applications to use FFADO, or to access the sound devices with user-land implementation, it doesn't matter that ALSA firewire stack is weak. In next section, I investigate ALSA implementation in user-land to seek a solution for this issue.
 
@@ -513,41 +513,41 @@ In this section, I investigate the way to implement firewire sound device driver
 
 In modern Operating System (OS), each process has an isolated address space, to protect a process from the other processes. OS has a mechanism to allow processes to communicate to each other. This mechanism is Interprocess Communication (IPC). Linux supports some ways for IPC.
 
-IPC is important for firewire sound device driver because of two reasons; AMDTP packets can include several types of data (section \ref{sec:formation-data-block} to page \pageref{sec:formation-data-block}), and duplex streams must be handled for 'presentation time' (section \ref{sec:duplex-streams} to page \pageref{sec:duplex-streams}). When several ALSA applications run for playback and capture PCM samples/MIDI messages, these applications require IPC between a packetization process and application processes.
+IPC is important for firewire sound device driver because of two reasons; AMDTP packets can include several types of data (section \ref{sec:formation-data-block} to page \pageref{sec:formation-data-block}), and duplex streams must be handled to process 'presentation time' (section \ref{sec:duplex-streams} to page \pageref{sec:duplex-streams}). When several ALSA applications run for playback and capture PCM samples/MIDI messages, these applications require IPC between a packetization process and application processes.
 
-There are a few possibilities to implement the driver with IPC. They are ALSA PCM plugins, ALSA External PCM plugins and CUSE application. Before investigating them, I describe ALSA implementation in user-land.
+There are a few possibilities to implement the driver with IPC for ALSA applications. They are ALSA PCM plugins, ALSA External PCM plugins and CUSE application. Before investigating them, I describe ALSA implementation in user-land.
 
 \subsection{ALSA implementation in user-land}
 
-Modern Central Processing Unit (CPU) has several modes to restrict software's access to system resources. In Linux, two modes are supported. One is user-mode and another is kernel-mode. In user-mode, software is forbidden to access to hardware resources. Software executes system-call to switch into kernel-mode and access to hardware resources, then the process returns to user-mode.
+Modern Central Processing Unit (CPU) has several modes to restrict software's access to system resources. In Linux, two modes are supported. One is user-mode and another is kernel-mode. In user-mode, software is forbidden to access hardware resources. Software executes system-call to switch into kernel-mode and access to hardware resources, then the process returns to user-mode.
 
-The resources of sound devices are also hardware resources, therefore ALSA applications should execute system-call to communicate to them. In ALSA, the entry points for system-call is character devices and the system-call is file operations to them. In ALSA, most of file operations are ioctl(2) with unique requests. I think ALSA developers requires more specific operations than simple file operations such like read(2)/write(2).
+The resources of sound devices are also hardware resources, therefore ALSA applications should execute system-call to communicate to them. In ALSA, the entry points for system-call is character devices and the system-call is file operations to them. In ALSA, the most of file operations are ioctl(2) with unique requests. I think ALSA developers requires more specific operations than simple file operations such like read(2)/write(2).
 
-In this reason, ALSA application developers should always consider the combination of ioctl(2) and its requests to handle sound devices. Thus, it's natural to use Application Programing Interface (API) in ALSA library\footnote{http://git.alsa-project.org/?p=alsa-lib.git} as an abstract layer for ALSA specific file operations.
+In this reason, ALSA application developers should always consider the combination of ioctl(2) and its requests to handle sound devices. Thus, it's natural to use API in ALSA library\footnote{http://git.alsa-project.org/?p=alsa-lib.git} as an abstract layer for ALSA specific file operations.
 
-ALSA library includes several interfaces. Each interface is for each character device. These character devices are under /dev/snd.
+ALSA library includes several interfaces. Each interface is for each character device. These character devices are usually under /dev/snd.
 
 \begin{description}
 \small
 \item[Mixer/hcontrol/control interface] \mbox{} \\
-Interfaces for control character device (/dev/snd/controlC\%i)
+Interfaces to get card information and to control devices via control character device (/dev/snd/controlC\%i)
 \item[PCM interface] \mbox{} \\
-An interface for PCM character device (/dev/snd/pcmC\%iD\%ip\{c,p\})
+An interface to transfer PCM frames via PCM character device (/dev/snd/pcmC\%iD\%ip\{c,p\})
 \item[hwdep interface] \mbox{} \\
-An interface for hardware dependent character device (/dev/snd/hwdepC\%iD\%i)
+An interface to execute device-dependent operation via hardware dependent character device (/dev/snd/hwdepC\%iD\%i)
 \item[RawMidi interface] \mbox{} \\
-An interface for midi character device (/dev/snd/midiC\%iD\%i)
+An interface to transfer MIDI messages via midi character device (/dev/snd/midiC\%iD\%i)
 \item[Sequencer interface] \mbox{} \\
-An interface to deliver the MIDI-like events between clients/ports via sequencer character device (/dev/snd/seq)
+An interface to deliver MIDI-like events between clients/ports via sequencer character device (/dev/snd/seq)
 \item[Timer interface] \mbox{} \\
 An interface to use hardware/software interrupt timer via timer character device (/dev/snd/timer)
 \end{description}
 
-In this list, the format after 'C' shows the number of card and the format after 'D' shows the number of device.
+In this list, the format after 'C' shows the number of card and the format after 'D' shows the number of device. In this section, I describe PCM interface only.
 
-In this section, I describe PCM interface only. ALSA PCM interface is used to transmit/receive PCM samples between application and device. The unit of transfer is called 'frame'. It means that PCM samples with the same timing, thus equals to the number of channels in the PCM substream. Most of functions returns the number of frames, instead of the number of bytes.
+ALSA PCM interface is used to transmit/receive PCM samples between application and device. The unit of transfer is called 'frame'. The frame means that PCM samples with the same timing, thus equals to the number of channels in the PCM substream. Most of functions returns the number of frames, instead of the number of bytes.
 
-When starting operations, ALSA application open the handle to one of PCM nodes. The PCM nodes are added to ALSA runtime according to configuration to extends functionality and features of PCM node. ALSA runtime configuration has settings of PCM nodes. In most case, the settings are corresponding to PCM plugins with hierarchical relationships between master and slave. When ALSA applications access to a master PCM node, the plugin works and transfer PCM frames between master buffer and slave buffer, then the frames reaches hw PCM plugin and directly communicate to an kernel-land driver. This mechanism allows PCM runtime to have 'plugin-chain' according to its configuration. 
+When starting operations, ALSA application open the handle to one of PCM nodes. The PCM nodes are added to ALSA runtime according to configuration to extends functionality and features of PCM node. ALSA runtime configuration has settings of PCM nodes. In most case, the settings are corresponding to PCM plugins with hierarchical relationships between master and slave. When ALSA applications access to a master PCM node, the plugin works and transfer PCM frames between master buffer and slave buffer. Finally, the frames reaches hw PCM plugin and directly communicate to an kernel-land driver. This mechanism allows PCM runtime to have 'plugin-chain' according to its configuration. 
 
 \begin{figure}[htbp]
 	\centering
@@ -565,7 +565,7 @@ The hw plugin executes file operations to PCM character devices. In most case, i
 	\label{fig:alsa-hw-plugin}
 \end{figure}
 
-When an ALSA application calls PCM open API of PCM interface, this function read runtime configuration files and parse it. In ALSA default, /usr/share/alsa/alsa.conf is loaded at first. This file loads /usr/share/alsa/alsa.conf.d/*, /etc/asound.conf and ~/.asoundrc. As a result, for PCM runtime, several PCM nodes are available. For example, hw, plughw(plug plugin with hw slave), dmix, dsnoop and default, see Figure \ref{pcm-nodes-playback}.
+When an ALSA application calls open API of PCM interface, this function read runtime configuration files and parse it. In ALSA default, /usr/share/alsa/alsa.conf is loaded at first. This file loads /usr/share/alsa/alsa.conf.d/*, /etc/asound.conf and ~/.asoundrc. As a result, for PCM runtime, several PCM nodes are available. For example, hw, plughw(plug plugin with hw slave), dmix, dsnoop and default, see Figure \ref{pcm-nodes-playback}.
 
 \begin{figure}[htbp]
 \small
@@ -593,7 +593,7 @@ plughw:CARD=Intel,DEV=0
 \end{figure}
 
 \subsection{ALSA PCM plugins}
-ALSA library has PCM plugins for several purpose\footnote{src/pcm/ in alsa-lib} and dmix/dsnoop plugins are good samples for IPC in ALSA. The dmix plugin multiplexes PCM frames from several applications and transfer the PCM samples to device. The dsnoop plugin delivers PCM frames from device to several applications. The dmix/dsnoop plugins use System V Shared Memory for IPC, System V Semaphore for mutual exclusive. ALSA PCM direct layer gives helper functions to these plugins.
+ALSA library has some PCM plugins for several purpose\footnote{src/pcm/ in alsa-lib} and dmix/dsnoop plugins are good samples for IPC usage in ALSA plugins. The dmix plugin multiplexes PCM frames from several applications and transfer the PCM samples to device. The dsnoop plugin delivers PCM frames from device to several applications. The dmix/dsnoop plugins use System V Shared Memory for IPC, System V Semaphore for mutual exclusive. ALSA PCM direct layer gives helper functions to these plugins.
 
 \begin{figure}[htbp]
 	\centering
@@ -603,19 +603,19 @@ ALSA library has PCM plugins for several purpose\footnote{src/pcm/ in alsa-lib} 
 \end{figure}
 
 
-When applications open dmix/dsnoop PCM node by calling snd\_pcm\_open(), the dmix/dsnoop plugins keep or connect System V Shared Memory and System V Semaphore. Then the shared memory is attached to the virtual memory space of each application process. This shared memory is used to share parameters and status of PCM stream for slave. The slave of dmix/dsnoop plugin is fixed to hw plugin. Additionally, the dmix plugin keeps one shared memory for multiplexing buffer, too.
+When applications open dmix/dsnoop PCM node by calling snd\_pcm\_open(), the dmix/dsnoop plugins keep or connect System V Shared Memory and System V Semaphore. Then the shared memory is attached to the virtual memory space of each application process. This shared memory is used to share parameters and status of PCM substream for slave. The slave of dmix/dsnoop plugin is fixed to hw plugin. Additionally, the dmix plugin keeps one shared memory for multiplexing buffer, too.
 
-When calling 'snd\_pcm\_writei()/snd\_pcm\_mmap\_commit()', the dmix plugin multiplexes PCM frames in application buffer and in shared memory, then write into slave buffer. The PCM frames are stored to shared memory and used by the other applications for next multiplexing. The shared memory is used as 'cache'. This allows any processes to multiplex PCM frames according to their timing and write the frames to buffer for slave. The buffer of slave is added by hw PCM plugin and it's the same mapped buffer which driver has (Figure \ref{fig:alsa-hw-plugin}). Although writing PCM frames, these processes don't move a buffer pointer for application by usual way so that processes can write PCM frames into the same position.
+When calling 'snd\_pcm\_writei()/snd\_pcm\_mmap\_commit()', the dmix plugin multiplexes PCM frames in application buffer and in shared memory, then write into slave buffer. The PCM frames are stored to shared memory and used by the other applications for next multiplexing. The shared memory is used as 'cache'. This allows any processes to multiplex PCM frames and write the frames to buffer for slave buffer according to their timing. The buffer of slave is added by hw PCM plugin, therefore the buffer is mmaped. Any process can access the buffer (Figure \ref{fig:alsa-hw-plugin}). The dmix plugin writes PCM frames, while this plugin doesn't move a buffer pointer by usual way so that any processes can write PCM frames into the same position.
 
 The dsnoop PCM plugin is simpler than dmix PCM plugin because there's no need to multiplex PCM samples. Each application read PCM frames from shared memory.
 
-There's two problems of ALSA PCM plugins for my purpose. The framework for ALSA PCM plugins don't allow master without slave. The basic idea of ALSA PCM plugins is to add features hw PCM node. This node is for communication to drivers in kernel-land, therefore this is against my purpose in this section. Additionally, there's an issue that one of processes must handle packets. If an ALSA application perform this role, the application cannot stop as long as the other applications use PCM nodes for a firewire device. A daemon process, therefore, is required to handle packets for ALSA applications.
+There's two problems of ALSA PCM plugins for my purpose. The basic idea of ALSA PCM plugins is to add features to hw PCM node, therefore the framework for ALSA PCM plugins don't allow master without slave. The hw PCM node is for communication to drivers in kernel-land, therefore this is against my purpose in this section. Additionally, there's an issue that one of processes must handle packets. If an ALSA application perform this role, the application cannot stop as long as the other applications use PCM nodes for a firewire device. A daemon process, therefore, is required to handle packets for ALSA applications.
 
 
 \subsection{ALSA External PCM plugins}
 ALSA has another way to extend PCM nodes in runtime. It's External PCM Plugin\cite{alsa-lib}. There are two usages of this; Filter type and I/O type.
 
-The filter type plugin is similar to PCM plugins with master/slave, while I/O type plugin needs no slave. The I/O type, therefore, is good for my purpose. A good example of I/O type plugin is pulse PCM External plugin\footnote{pulse/ in alsa-plugins} for PulseAudio.
+The Filter type plugin is similar to PCM plugins with master/slave, while I/O type plugin needs no slave. The I/O type, therefore, is good to communicate a daemon process. A good example of I/O type plugin is pulse PCM External plugin\footnote{pulse/ in alsa-plugins} for PulseAudio.
 
 PulseAudio\footnote{http://www.pulseaudio.org} is a project for sound server daemon. In modern desktop environment, PulseAudio adds ALSA runtime configuration\footnote{/usr/share/alsa/pulse-alsa.conf} to overwrite a default PCM node as pulse PCM node. As a result, most of applications in the desktop environment do IPC to PulseAudio via pulse External PCM plugin, then PulseAudio multiplexes/demultiplexes PCM samples for each ALSA applications. Finally, PulseAudio transfer PCM samples from/to each devices.
 
@@ -626,7 +626,7 @@ PulseAudio\footnote{http://www.pulseaudio.org} is a project for sound server dae
 	\label{alsa-pulse}
 \end{figure}
 
-PulseAudio implements several network protocols such like RTP-related protocols, or utilizes communication backends such like Rygel\footnote{Rygel is UPnP Device Architecture and Device Control Protocol application for Media Renderer/Server}. Furthermore, PulseAudio has its own network protocol to communicate to PulseAudio in the other hosts. This means that PulseAudio has a strong framework to use several types of devices.
+PulseAudio implements several network protocols such like RTP-related protocols, and utilizes communication backends such like Rygel\footnote{Rygel is UPnP Device Architecture and Device Control Protocol application for Media Renderer/Server}. Furthermore, PulseAudio has its own network protocol to communicate to PulseAudio in the other hosts. This means that PulseAudio has a strong framework to use several types of devices.
 
 There is another example. It's freebob External PCM Plugin for FreeBoB. The source of this plugin is 'alsa-plugin' directory in the top of FFADO subversion trunk\footnote{http://subversion.ffado.org/browser/trunk}.
 
@@ -637,9 +637,9 @@ There is another example. It's freebob External PCM Plugin for FreeBoB. The sour
 	\label{alsa_freebob}
 \end{figure}
 
-This plugin creates a thread when starting. This thread polls with libfreebob wait function, and transfers PCM samples/MIDI messages when waking up. There is no mechanism to check avail frames in ALSA PCM buffer. This plugin also has a restriction that just one application can transfer streams, therefore either playback or capture is available. This plugin uses ALSA sequencer interface to gather/deliver MIDI messages between the other ALSA applications. This plugin seems to be under working and suspended but shows good perspective for ALSA applications to use FFADO.
+This plugin creates a thread when starting. This thread polls with libfreebob wait function, and transfers PCM samples/MIDI messages when waking up. This plugin also has a restriction that just one application can transfer streams, therefore either playback or capture is available. This plugin uses ALSA sequencer interface to gather/deliver MIDI messages between the other ALSA applications. This plugin seems to be under working and suspended but shows good perspective for ALSA applications to use FFADO.
 
-The FreeBoB PCM plugin reinforces the requirement of daemon processes to packetize. And in modern desktop environment, PulseAudio is a candidate for such daemon. If PulseAudio has firewire stack, ALSA applications can transfer data between firewire devices via default PCM node. For MIDI functionality, PulseAudio should use ALSA sequencer interface as FreeBoB plugin does.
+The FreeBoB PCM plugin reinforces the requirement of daemon processes to packetize, because this plugin can't handle both of playback/capture PCM frames. And in modern desktop environment, PulseAudio is a candidate for such daemon. If PulseAudio has firewire stack, ALSA applications can transfer data between firewire devices via default PCM node. For MIDI functionality, PulseAudio should use ALSA sequencer interface as FreeBoB plugin does.
 
 But there's already a similar PCM External I/O plugin. It's jack PCM plugin for jackd. This plugin adds jack PCM node to ALSA runtime and make ALSA applications as a client for jackd. The jackd can use firewire devices with FFADO backend. This way requires users to write ALSA configuration but need no other works.
 
@@ -663,7 +663,7 @@ Linux Filesystem subsystem has CUSE as FUSE extension. CUSE allows to implement 
 	\label{fuse}
 \end{figure}
 
-Open Sound System Proxy Daemon (osspd) is a good example\footnote{http://sourceforge.net/projects/osspd/}. The osspd is an application of CUSE. When Open Sound System applications access to /dev/\{dsp, adsp, mixer\}, osspd handles these file operations in user-space with CUSE help, then execute IPC between PulseAudio or ALSA.
+Open Sound System Proxy Daemon (osspd) is a good example for CUSE application\footnote{http://sourceforge.net/projects/osspd/}. When Open Sound System applications access to /dev/\{dsp, adsp, mixer\}, osspd handles these file operations in user-space with CUSE help, then execute IPC between PulseAudio or ALSA.
 
 \begin{figure}[H]
 	\centering
@@ -684,7 +684,7 @@ For my purpose, this way is nice because there's no need to touch ALSA user-land
 	\label{alsa_cuse_firewire}
 \end{figure}
 
-When device is connected, the driver registers ALSA character devices except for PCM. The system detects new ALSA devices for firewire sound devices, then run a daemon. The daemon calls FUSE library to add ALSA PCM character device with appropriate major/minor number. Then new PCM device is available in ALSA runtime. This idea can reduce the amount of codes in the daemon but still needs much works to implement PCM component in the daemon.
+When device is connected, the driver registers ALSA character devices except for PCM. When system detects new ALSA devices for firewire sound devices, the system runs a daemon. The daemon calls FUSE library to add ALSA PCM character device with appropriate major/minor number. Then new PCM device is available in ALSA runtime. This idea can reduce the amount of codes in the daemon but still needs much works to implement ALSA PCM component in the daemon.
 
 In this section, I investigate some software implementations in user-land to seek better ways for ALSA applications and firewire driver. As a result, I can conclude that the best way is to implement the drivers in PulseAudio, and realize the work is external to ALSA user-land. In the next section, I investigate ALSA kernel-land to seek another way.
 
@@ -693,22 +693,22 @@ In this section, I investigate some software implementations in user-land to see
 
 In this section, I investigate ALSA implementation in kernel-land.
 
-Generally, after executing system-call, a process is running in kernel-mode and has a privilege to access hardware resources. If the data from hardware did not arrive yet, the process requests process-scheduler to generate context-switch and sleeps. Then the another process gain CPU and continue to run. Before sleeping, the process registers an event for waking-up. Every time when requested to generate context-switch, process-scheduler checks registered events and decide which process is awaken. This is a part of process-scheduling and dedicates to Time Sharing System (TSS).
+Generally, after executing system-call, a process is running in kernel-mode and has a privilege to access hardware resources. If the data from hardware did not arrive yet, the process requests process-scheduler to generate context-switch and sleeps. Then the another process gain CPU and continue to run. Before sleeping, the process registers an event for waking-up. Every time when requested to generate context-switch, process-scheduler checks the events and decide which process is awaken. This is a part of process-scheduling and dedicates to Time Sharing System (TSS).
 
 When ALSA application executes system-call, the process in kernel-mode arrives at the codes in ALSA Core. ALSA Core includes some modules for each interface such as PCM. The code in these modules check events and continue the process if the event occurs, else it makes the process to sleep. When sound devices generate hardware interrupt, each ALSA driver handles the interrupt and generate a event. This is a basic work of ALSA implementation in kernel-land.
 
 \subsection{ALSA Core and drivers}
 
-ALSA Core consists of modules which perform important roles in sound subsystem. The sources of ALSA Core locate under sound/core/. ALSA Core manages sound devices as 'card', and manages character devices corresponding to 'components' which belong to the card\cite{alsa-driver}. The component represents each functionality on sound devices such as PCM or MIDI, and the modules include helper functions for the functionalities.
+ALSA Core consists of modules which perform important roles in sound subsystem. The source codes of ALSA Core locate under sound/core/. ALSA Core manages sound devices as 'card', and manages character devices corresponding to 'components' which belong to the card\cite{alsa-driver}. The component represents each functionality on sound devices such as PCM or MIDI, and the modules include helper functions for the functionalities.
 
-Each driver registers a card instance to ALSA Core and adds instances of component to the card. Then ALSA Core requests Linux Driver Core to add character devices to system. When granting the request and handling it, Linux Driver Core registers the character devices and adds corresponding kobject, then notifies kevent. In usual desktop environment, "udevd" receives the kevent and adds special files to system for the character devices according to specific rules. Finally ALSA applications can communicate to components of drivers via the special files.
+When a sound device is detected, a corresponding driver registers a instance of card to ALSA Core and adds instances of component to the card. Then ALSA Core requests Linux Driver Core to add character devices to system. When granting the request and handling it, Linux Driver Core registers the character devices and adds corresponding kobject, then notifies kevent. In usual desktop environment, "udevd" receives the kevent and adds special files to system for the character devices according to specific rules. Finally ALSA applications can communicate to components of drivers via the special files.
 
 Major modules of ALSA Core are:
 
 \begin{description}
 \small
 \item[snd] \mbox{} \\
-Management of cards and devices, including methods for control interface, helper functions for control component and procfs nodes
+Management of cards and devices, including methods for control , helper functions for control component and procfs nodes
 \item[snd\_pcm] \mbox{} \\
 Including methods for PCM interface and helper functions for PCM component
 \item[snd\_rawmidi] \mbox{} \\
@@ -721,7 +721,7 @@ Including methods for timer interface and helper functions for timer component
 
 These components include methods of common file operations such as ioctl or mmap, and defines a batch of ALSA-specific operations for drivers. Each driver registers functions as the methods at adding components. In this way, each driver becomes to handle requests from ALSA applications.
 
-For communication to actual devices, drivers use each Linux subsystem because the devices are on buses such like PCI-Express bus or platform bus. The drivers should be registered to bus driver and handle callbacks from the bus driver. Additionally, data transmission is mostly based on DMA and related events are notified by hardware interrupt. Each driver should also uses Linux subsystem to handle DMA and hardware interrupt.
+For communication to actual devices, drivers use each Linux subsystem because the devices are on buses such like PCI-Express bus or platform bus. The drivers should be registered to bus driver and handle callbacks from the bus driver. Additionally, data transmission is mostly based on DMA and related events are notified by hardware interrupt, therefore each driver should also uses Linux subsystem to handle DMA and hardware interrupt.
 
 In next subsection, I describe interaction between PCM Interface/Component and application/driver.
 
@@ -734,9 +734,9 @@ An instance of PCM Component includes two members for PCM streams. One is for an
 
 The PCM runtime has several state, 'open', 'setup', 'prepared', 'running', 'xrun', 'draining', 'paused', 'suspended' and 'disconnected'\cite{alsa-lib}. Applications changes the state by PCM interface, then corresponding method of driver is called by PCM component. The runtime includes several information such like hardware description and hardware/software parameters. When the runtime is created, drivers set the hardware description in the runtime. Next, the application sets the hardware/software parameters by PCM interface.
 
-When the parameters are decided, driver keeps PCM ring buffer. In most case, drivers support mmap file operation for PCM Component. Then PCM interface maps this buffer to process' virtual address area when applications or master plugins set mmap access flags to the hw\_params\footnote{SND\_PCM\_ACCESS\_MMAP\_INTERLEAVED, SND\_PCM\_ACCESS\_MMAP\_NONINTERLEAVED and SND\_PCM\_ACCESS\_MMAP\_COMPLEX}.
+When the parameters are decided, driver keeps PCM ring buffer. In most case, drivers support mmap file operation for PCM Component. Then PCM interface maps this buffer to process' virtual address area when applications or master plugins set mmap access flags to the hardware parameters\footnote{SND\_PCM\_ACCESS\_MMAP\_INTERLEAVED, SND\_PCM\_ACCESS\_MMAP\_NONINTERLEAVED and SND\_PCM\_ACCESS\_MMAP\_COMPLEX}.
 
-The state of the ring buffer is described in the other buffers; 'status' buffer and 'control' buffer. These buffers are kept by PCM Component in kernel-space when applications or master plugins open hw plugin. Then, in most case, 'hw\_ptr' and 'appl\_ptr' in these buffers are mapped to processes' virtual address area\footnote{When failed to mmap(2), an alternative way is applied. hw plugin keeps a buffer for sync\_ptr structure and execute ioctl(2) to update this pointer when any PCM frames are handled. This way includes overhead.}.
+The state of the ring buffer is in the other buffers; 'status' buffer and 'control' buffer. These buffers are kept by PCM Component in kernel-space when applications or master plugins open hw plugin. Then, in most case, 'hw\_ptr' and 'appl\_ptr' in these buffers are mapped to processes' virtual address area\footnote{When failed to mmap(2), an alternative way is applied. hw plugin keeps a buffer for sync\_ptr structure and execute ioctl(2) to update this pointer when any PCM frames are handled. This way includes overhead.}.
 
 \begin{figure}
 \small
@@ -762,7 +762,7 @@ struct snd_pcm_mmap_control {
 
 The 'appl\_ptr' is updated only by applications and there's two cases. One of the cases is that some PCM frames are written or read by non-mmap functions\footnote{The functions are snd\_pcm\_writei() / snd\_pcm\_writen() / snd\_pcm\_readi() / snd\_pcm\_readn() but be sure to plugin-chain.}. In this case, PCM component moves the 'appl\_ptr' in kernel-space by the number of requested frames. Another case is that some PCM frames are committed by mmap functions\footnote{The function may be snd\_pcm\_mmap\_commit() but be sure to plugin-chain}. In this case, hw plugin changes the 'appl\_ptr' in user-space by the number of frames.
 
-On the other hand, the another pointer, 'hw\_ptr' is changed only by drivers when handling any hardware interrupts from devices. A page including 'hw\_ptr' is mapped as read-only, and no applications can change it. The 'hw\_ptr' is updated by the number of frames per 'period'. The 'period' is a part of buffer into which the ring buffer is split. When the devices confirm to finish transferring PCM frames by the number of period, they call snd\_pcm\_period\_elapsed(). Then the 'hw\_ptr' is moved to next beginning of period.
+On the other hand, the another pointer, 'hw\_ptr' is changed only by drivers when handling any hardware interrupts from devices. A page including 'hw\_ptr' is mapped as read-only, and no applications can change it. The 'hw\_ptr' is updated by the number of frames per 'period'. The 'period' is a part of ring buffer into which the ring buffer is split. When the devices confirm to finish transferring PCM frames by the number of period, they call snd\_pcm\_period\_elapsed(). Then the 'hw\_ptr' is moved to next beginning of period.
 
 \begin{figure}[H]
 	\centering
@@ -771,11 +771,11 @@ On the other hand, the another pointer, 'hw\_ptr' is changed only by drivers whe
 	\label{alsa-pcm-buffer}
 \end{figure}
 
-The two pointers, 'hw\_ptr' and 'appl\_ptr', are used to check 'avail' space for application. The 'avail' space is the number of frames currently available for applications. For playback application, the 'avail' space equals to a space without PCM frames. For capture application, the 'avail' space equals to a space with PCM frames. When hw plugin writes or reads frames with non-blocking operation, functions instantly return if the 'avail' space has less frames than requested frames. When hw plugin writes or reads frames with blocking operation, the application is blocked until timeout or all of requested frames are transferred. As a default, the timeout is 10 sec. The timeout means 'hw\_ptr' has never changed during the 10 sec and there may be some troubles about interrupt handler. But this behaviour is changed with 'NO\_PERIOD\_WAKEUP' hardware flag\footnote{SNDRV\_PCM\_HW\_PARAMS\_NO\_PERIOD\_WAKEUP} for PCM substream. If driver supports this functionality, the timeout is extended to the maximum number which Linux process-scheduler supports\footnote{MAX\_SCHEDULE\_TIMEOUT in include/linux/sched.h}. In this mode, hardware interrupts should be generated periodically and drivers are sure to handle them.
+The two pointers, 'hw\_ptr' and 'appl\_ptr', are used to check 'avail' space for application. The 'avail' space is the number of frames currently available for applications. For playback application, the 'avail' space equals to a space in the ring buffer without PCM frames. For capture application, the 'avail' space equals to a space with PCM frames. When hw plugin writes or reads frames with non-blocking operation, functions instantly return if the 'avail' space has less frames than requested frames. When hw plugin writes or reads frames with blocking operation, the application is blocked until timeout or all of requested frames are transferred, or receivin signals. As a default, the timeout is 10 sec. The timeout means 'hw\_ptr' has never changed during the 10 sec, thus there may be some troubles about interrupt handler. But this behaviour is changed with 'NO\_PERIOD\_WAKEUP' hardware flag\footnote{SNDRV\_PCM\_HW\_PARAMS\_NO\_PERIOD\_WAKEUP} for PCM substream. If driver supports this functionality, the timeout is extended to the maximum number which Linux process-scheduler supports\footnote{MAX\_SCHEDULE\_TIMEOUT in include/linux/sched.h}. In this mode, hardware interrupts should be generated periodically and drivers are sure to handle them.
 
-When applications executes poll(2) for descriptors gained by snd\_pcm\_poll\_descriptors() with hw plugin, the process is blocked by default till timeout or 'avail' space has a rest. PCM Component has two modes for this behaviour; one is interrupt-base, as described, and another is a combination of both the interrupt-base and timer-base. When using the combination mode, snd\_pcm\_poll\_descriptors() returns two descriptors for both PCM character device and Timer character device. Both of them wake up per period but the source of timer is different. The way to change the mode is to set 'period\_event' software parameter for PCM runtime by snd\_pcm\_sw\_params\_set\_period\_event(). PulseAudio uses a combination of 'NO\_PERIOD\_WAKEUP' hardware parameter and 'period\_event' software parameter for its 'glitch free' operation\footnote{Features/GlitchFreeAudio http://fedoraproject.org/wiki/Features/GlitchFreeAudio}.
+When applications executes poll(2) for descriptors gained by snd\_pcm\_poll\_descriptors() with hw plugin, by default the process is blocked till timeout or 'avail' space has a rest, or receiving signals. PCM Component has two modes for this behaviour; one is interrupt-base, as described, and another is a combination of both the interrupt-base and timer-base. When using the combination mode, snd\_pcm\_poll\_descriptors() returns two descriptors for both PCM character device and Timer character device. Both of them wake up per period but the source of timer is different. The way to change the mode is to set 'period\_event' software parameter for PCM runtime by snd\_pcm\_sw\_params\_set\_period\_event(). PulseAudio uses a combination of 'NO\_PERIOD\_WAKEUP' hardware parameter and 'period\_event' software parameter for its 'glitch free' operation\footnote{Features/GlitchFreeAudio http://fedoraproject.org/wiki/Features/GlitchFreeAudio}.
 
-The rest of buffer against 'avail' is 'hw\_avail', available space for devices. For applications, the 'hw\_avail' is the space for rewinding. The applications can reverse 'appl\_ptr' by the number of frames in 'hw\_avail'. But developers should be sure that 'hw\_ptr' can be changed by drivers in any time.
+The rest of buffer against 'avail' is 'hw\_avail' The 'hw\_avail' is available space for devices. For applications, the 'hw\_avail' is the space for rewinding. The applications can reverse 'appl\_ptr' by the number of frames in 'hw\_avail'. But developers should be sure that 'hw\_ptr' can be changed by drivers in any time.
 
 The actual value for these two pointers doesn't round up in the number of frames in buffer. It's incremented until 'boundary' within UINT\_MAX, then round up. The way to calculate the 'boundary' is:
 
@@ -802,17 +802,17 @@ Linux firewire subsystem, so-called Juju\footnote{I don't know the reason.}, is 
 \item IEEE 1394 Serial bus management
 \item IEEE 1394 Transaction layer
 \item Driver for OHCI 1394 compliant controller device
-\item Driver for fw character device
+\item Driver for fw character device corresponding to units
 \end{itemize}
 
-This subsystem locates under drivers/firewire/ and consists of several files. They include snoop mode driver for a certain 1394 controller, and protocol drivers for RFC 1734, RFC 2855, RFC 3146 and SBP-2. But here I describe core functionality and OHCI 1394 related stuff only:
+This subsystem locates under drivers/firewire/ and consists of several files. They include snoop mode driver for a certain 1394 controller, and protocol drivers for RFC 2734\footnote{https://tools.ietf.org/html/rfc2734 IPv4 over IEEE 1394}, RFC 2855\footnote{https://tools.ietf.org/html/rfc2855 DHCP for IEEE 1394}, RFC 3146\footnote{https://tools.ietf.org/html/rfc3146 Transmission of IPv6 Packets over IEEE 1394 Networks } and SBP-2. But here I describe core functionality and OHCI 1394 related stuff only:
 
 \begin{description}
 \small
 \item[drivers/firewire/core-cdev.c] \mbox{} \\
 Methods for file operations of fw character devices
 \item[drivers/firewire/core-device.c] \mbox{} \\
-Helper functions for management of fw character devices
+Helper functions for management of units
 \item[drivers/firewire/core-topoligy.c] \mbox{} \\
 Management of bus topology by reaction to events on the bus
 \item[drivers/firewire/core-iso.c] \mbox{} \\
@@ -832,11 +832,11 @@ Driver for OHCI 1394 compliant host controller
 	\label{fw-stack-high}
 \end{figure}
 
-This subsystem performs Cycle Master and Bus Manager in IEEE 1394. This subsystem adds fw character devices for applications. The fw character devices are corresponding to each node on IEEE 1394 bus. The applications in user-land can communicate to the nodes by file operations to the fw character devices, mainly ioctl(2). As ALSA does, this subsystem also gives a library (libraw1394) for API as an abstract layer for the specific file operations. Additionally, this subsystem also gives API in kernel-land. 
+This subsystem performs Cycle Master and Bus Manager in IEEE 1394. This subsystem adds fw character devices for applications. The fw character devices are corresponding to each unit on IEEE 1394 bus. The applications in user-land can communicate the units by executing file operations to the fw character devices, mainly ioctl(2). As ALSA does, this subsystem also gives a library (libraw1394) for API as an abstract layer for the specific file operations. Additionally, this subsystem also gives API for kernel-land.
 
-The functionalities of Asynchronous Communication and Isochronous Communication are based on OHCI 1394. Thus, they are represented as context (section \ref{ohci-1394} to page \pageref{ohci-1394}).
+The functionalities for Asynchronous Communication and Isochronous Communication are based on OHCI 1394. Thus, they are represented as context (section \ref{ohci-1394} to page \pageref{ohci-1394}).
 
-Linux firewire stack has an abstract layer for the controller device. Currently two drivers are under this abstract layer. The dummy driver is mainly used to shutdown actual cards, therefore OHCI 1394 driver is usually used to communicate to devices. This driver receives/transmits data of packet from/to controller by DMA according to descriptors, and handle hardware interrupts which the controller generates. The driver controls the controller via registers.
+Linux firewire stack has an abstract layer for the controller device. Currently two drivers are under this abstract layer. The dummy driver is mainly used to shutdown actual cards, therefore OHCI 1394 driver is usually used to communicate actual devices. This driver receives/transmits data of packet from/to controller by DMA according to descriptors, and handle hardware interrupts which the controller generates. The driver controls the controller via registers.
 
 \begin{figure}[htbp]
 	\centering
@@ -865,7 +865,7 @@ ALSA firewire stack is designed for each driver to communicate to firewire devic
    For AMDTP packet streaming in IEC 61883-6
 \end{description}
 
-All of them are used to built for 'snd-firewire-lib' module. While firewire drivers use the helper functions to communicate to sound devices, drivers also use ALSA Core to communicate to ALSA applications.
+All of them are used to built for 'snd-firewire-lib' module. While firewire sound drivers use the helper functions to communicate to sound devices, the drivers also use ALSA Core to communicate to ALSA applications.
 
 \begin{figure}[htbp]
 	\centering
@@ -874,7 +874,7 @@ All of them are used to built for 'snd-firewire-lib' module. While firewire driv
 	\label{alsa_stack}
 \end{figure}
 
-\subsubsection{Isochronous resources functionality}
+\subsubsection{Isochronous Resources functionality}
 
 This module gives a structure for isochronous resources such as channels and bandwidth. Drivers initialize an instance of the structure by fw\_iso\_resources\_init() with firewire unit. After initializing, the drivers can allocate/free isochronous resources by fw\_iso\_resources\_allocate()/fw\_iso\_resources\_free(). When bus reset occurs, fw\_iso\_resources\_update() should be called. To release the instance, fw\_iso\_resources\_destroy() is used.
 
@@ -898,33 +898,33 @@ This module gives a structure for continuous packet buffer. Drivers initialize a
 \subsubsection{AMDTP functionality}
 \label{sec:enhancement-amdtp}
 
-This module gives a structure for AMDTP outgoing stream and some operations to handle an instance of the structure. This functionality uses the continuous packets buffer functionality internally. Drivers initialize an instance of the structure by amdtp\_out\_stream\_init(). After initializing, amstp\_out\_stream\_set\_parameters() is used to set streaming parameters such as sampling rate, the number of Multi Bit Linear Audio (MBLA) data channel and MIDI Conformant data channel. After setting these parameters, amdtp\_out\_stream\_get\_max\_payload() returns the maximum number of bytes of payload for a packet with current parameters.
+This module gives a structure for AMDTP outgoing stream and some operations to handle an instance of the structure. This functionality uses the continuous packets buffer functionality internally. Drivers initialize an instance of the structure by amdtp\_out\_stream\_init(). After initializing, amstp\_out\_stream\_set\_parameters() is used to set streaming parameters such as sampling rate, the number of MBLA data channel and MIDI Conformant data channel. After setting these parameters, amdtp\_out\_stream\_get\_max\_payload() returns the maximum number of bytes in payload for a packet with current parameters.
 
 Drivers can start the stream by amdtp\_out\_stream\_start(). Then amdtp\_out\_stream\_stop() is used to stop the stream. To release the stream, amdtp\_out\_destroy\_stream() is used. When bus reset occurs, amdtp\_out\_stream\_update() is used for new node ID.
 
-For PCM component, firewire-lib gives helper functions. During streaming, To set PCM format, amdtp\_out\_stream\_set\_pcm\_format() is used. To initialize PCM-related members of a stream, amdtp\_out\_stream\_pcm\_prepare() is used. When starting/stopping to transfer PCM frames, amdtp\_out\_stream\_pcm\_trigger() is used. To get the numbers of frames in PCM ring buffer, amdtp\_out\_stream\_pcm\_pointer() is used. When killing PCM substreams, amdtp\_out\_stream\_pcm\_abort() is used. To check PCM substream is running or not over an AMDTP stream, amdtp\_out\_stream\_pcm\_running() is used.
+For PCM component, snd-firewire-lib gives helper functions. Before starting streaming, amdtp\_out\_stream\_set\_pcm\_format() is used to set PCM format. To initialize PCM-related members of a stream, amdtp\_out\_stream\_pcm\_prepare() is used. When starting/stopping to transfer PCM frames, amdtp\_out\_stream\_pcm\_trigger() is used. To get the numbers of frames in PCM ring buffer, amdtp\_out\_stream\_pcm\_pointer() is used. When killing PCM substreams, amdtp\_out\_stream\_pcm\_abort() is used. To check PCM substream is running or not over an AMDTP stream, amdtp\_out\_stream\_pcm\_running() is used.
 
-Let's see the detail to generate AMDTP outgoing packets in Figure \ref{fig:packetization-out}. The amdtp\_out\_stream\_start() function queues a series of packet with a 'skip' flag, then firewire-ohci adds the packets into descriptor list. To the end of the series, the function sets 'interrupt' flag. When the 'interrupt' packet is queued, firewire-ohci sets special flag to a descriptor corresponding to the packet. After queueing, the amdtp\_out\_stream\_start() function starts an isochronous context with a callback function. Then firewire-ohci starts to transfer descriptors to OHCI 1394 controller via DMA, and OHCI 1394 controller transmits packets corresponding to the descriptors. When OHCI 1394 controller finish transmitting the 'interrupt' packet, it generates hardware interrupt. The firewire-ohci handles the interrupt and schedules tasklet. When the tasklet is executed in software interrupt context, the callback function is executed. Then snd-firewire-lib generates new series of packets with PCM samples, and queueing them. At the end of packets in the series, the functionality sets the 'interrupt' flag again. When OHCI 1394 controller transmits this packet with 'interrupt', it generates hardware interrupt and snd-firewire-lib generates new series of packets and queues them.
+Let's see the detail to generate AMDTP outgoing packets in Figure \ref{fig:packetization-out}. At first, the amdtp\_out\_stream\_start() function queues a series of packet with a 'skip' flag, then firewire-ohci adds the packets into descriptor list. To the end of the series, the function sets 'interrupt' flag. When the 'interrupt' packet is queued, firewire-ohci sets special flag to a descriptor corresponding to the packet. After queueing, the amdtp\_out\_stream\_start() function starts an isochronous context with a callback function. Then firewire-ohci starts to transfer descriptors to OHCI 1394 controller via DMA, and OHCI 1394 controller transmits packets corresponding to the descriptors. When OHCI 1394 controller finish transmitting the 'interrupt' packet, it generates hardware interrupt. The firewire-ohci handles the interrupt and schedules tasklet. When the tasklet is executed in software interrupt context, the callback function is executed. Then snd-firewire-lib generates new series of packets with PCM samples, and queueing them. At the end of packets in the series, the functionality sets the 'interrupt' flag again. When OHCI 1394 controller transmits this packet, it generates hardware interrupt and snd-firewire-lib generates new series of packets and queues them.
 
 \begin{figure}[H]
 	\centering
 	\includegraphics{./img/packetization-out.svg.eps}
-	\caption{{Generating packets for out stream}}
+	\caption{{Generating packets for outgoing stream}}
 	\label{fig:packetization-out}
 \end{figure}
 
-As of 2013, AMDTP functionality uses 48 queues \footnote{QUEUE\_LENGTH in sound/firewire/amdtp.c} and 16 packets for interrupt interval \footnote{INTERRUPT\_INTERVAL in sound/firewire/amdtp.c}. The hardware interrupts nominally occur every 2 millisecond and it takes 6 millisecond to transmit a first packet since starting isochronous context. Actually this depends on bandwidth for asynchronous communication, see Figure \ref{cycle-start}.
+As of 2013, AMDTP functionality uses 48 queues \footnote{QUEUE\_LENGTH in sound/firewire/amdtp.c} and 16 packets for interrupt interval \footnote{INTERRUPT\_INTERVAL in sound/firewire/amdtp.c}. The hardware interrupts nominally occur every 2 millisecond and it takes 6 millisecond to transmit a first packet with PCM since starting isochronous context. Actually this depends on bandwidth for asynchronous communication, see Figure \ref{cycle-start}.
 
 There is a case that snd-firewire-lib fails to continue streaming. It's to fail queueing packets. To check whether a stream is running or not, amdtp\_out\_stream\_running() is used, and amdtp\_out\_streaming\_error() is used to detect error. Once streaming becomes error state, the stream should be stopped by amdtp\_out\_stream\_stop(), then start by amdtp\_out\_stream\_start() again.
 
-As of 2013, this functionality doesn't allow drivers to perform as a timing slave. Although a timing slave is required to handle the sequence of value in SYT field from incoming packets to outgoing packets \ref{sec:duplex-streams}, the functionality doesn't support incoming packets. The functionality, therefore, includes the generators of the sequence of value in SYT field and the number of data blocks in each packets because these sequences are relevant to each other. In blocking mode, the number of data blocks is fixed according to SYT\_INTERVAL. In non-blocking mode, it's not a single way to calculate the number of data blocks in each packets\cite{iec61883-6-1, iec61883-6-2}.
+As of 2013, this functionality doesn't allow drivers to perform as a timing slave. Although a timing slave is required to handle the sequence of value in SYT field from incoming packets to outgoing packets (Section \ref{sec:duplex-streams} to page \pageref{sec:duplex-streams}), the functionality doesn't support incoming packets. The functionality, therefore, includes the generators of the sequence of value in SYT field and the number of data blocks in each packets because these sequences are relevant to each other.
 
 \section{Enhancement of ALSA firewire stack}
 
 As of 2013, this stack is only for outgoing stream (received stream in device side) in both blocking/non-blocking mode. In detail,
 \begin{itemize}
-\item CMP layer handles iMPR/iPCR only
-\item AMDTP layer handles isochronous outgoing context only
+\item CMP functionality handles iMPR/iPCR only
+\item AMDTP functionality handles isochronous outgoing context only
 \item AMDTP packet can transfer PCM samples only
 \item The value of SYT field in packets from device is not available for outgoing packet
 \end{itemize}
@@ -955,11 +955,11 @@ Furthermore, each driver should prevent from disturbing user-land drivers. Dice 
 
 Comparing to an idea to implement drivers in user-land, an idea to implement it in kernel-land has less issues of communication to ALSA application because this idea can use ALSA Core. This idea gives good transparency to ALSA applications. Moreover, there's already ALSA firewire stack for firewire drivers. The stack has a lack of some requirements but an enhancement of the stack is less work than implementing it in user-land.
 
-I started works for it in the beginning of 2013, and it's merged to ALSA upstream May 2014. It takes one and a half years. June 2014, at Linux 3.16 merge window, ALSA maintainer pushed this work into Linux upstream. The patchset for this work consists of 63 patches but 14 patches of them are for correction. The first 18 patches are for firewire-lib, for AMDTP, CMP and FCP. The next 14 patches are for fireworks driver. The next 16 patches are for bebob driver.
+I started works for this idea in the beginning of 2013, and the works are merged to ALSA upstream May 2014. It takes one and a half years. June 2014, at Linux 3.16 merge window, ALSA maintainer pushed the work into Linux upstream. The patchset for the work consists of 63 patches but 14 patches of them are for correction. The first 18 patches are for firewire-lib, for AMDTP, CMP and FCP. The next 14 patches are for fireworks driver. The next 16 patches are for bebob driver.
 
 \subsection{Enhancement for AMDTP}
 
-The firewire-lib newly supports these functionalities for AMDTP:
+The snd-firewire-lib newly supports these functionalities for AMDTP:
 
 \begin{itemize}
 	\item Handling incoming AMDTP stream
@@ -969,22 +969,22 @@ The firewire-lib newly supports these functionalities for AMDTP:
 	\item duplex streams with timestamp synchronization
 \end{itemize}
 
-This work renames prefix of 'amdtp\_out\_stream' to 'amdtp\_stream' for all of functions and members of AMDTP stream structure, to use the same structure for both directions.
+This work renames prefix of 'amdtp\_out\_stream' to 'amdtp\_stream' for all of functions and members for AMDTP stream structure, to use the same structure for both directions.
 
-This work newly adds a support for AMDTP in stream, and adds an argument for amdtp\_stream\_init(), to indicate the direction of AMDTP stream. After initialized, the instance of stream can be operated by the same way for both direction.
+This work newly adds a support for AMDTP incoming stream, and adds an argument for amdtp\_stream\_init(), to indicate the direction of AMDTP stream. After initialized, the instance of stream can be operated by the same way for both direction.
 
 Let's see the detail to handle AMDTP incoming stream in Figure \ref{fig:packetization-in}. The mechanism is almost the same as generating outgoing packets, while there are two big differences.
 
 One is dequeueing packets instead of generating packets. When OHCI 1394 controller fills an 'interrupt' descriptor with an incoming packet, it generates a hardware interrupt. The firewire-ohci handles this hardware interrupt and schedules tasklet. When the tasklet is executed in software interrupt context, a callback function in snd-firewire-lib is executed. Then AMDTP functionality perform dequeueing and queueing packets.
 
-In current implementation, the length of queue and the interval of interrupt is the same for incoming/outgoing AMDTP stream. As a result, it nominally takes 2 millisecond to handle a first packet since the packet reached.
+In current implementation, the length of queue and the interval of interrupt is the same for incoming/outgoing AMDTP stream. As a result, it nominally takes 2 millisecond to handle a first incoming packet since the packet reached.
 
 Another is a functionality to detect discontinuity of the sequence of incoming AMDTP packets. Each AMDTP packet has DBC field for this purpose. In a case of the detection, the stream is stopped and corresponding PCM substream is aborted. In this case, the stream should be stopped and started again.
 
 \begin{figure}[H]
 	\centering
 	\includegraphics{./img/packetization-in.svg.eps}
-	\caption{{Handling packets for in stream}}
+	\caption{{Handling packets for incoming stream}}
 	\label{fig:packetization-in}
 \end{figure}
 
@@ -1012,29 +1012,31 @@ This work also enables drivers to call amdtp\_stream\_set\_pcm\_format() during 
 
 This work adds an argument to cmp\_connection\_init(), to indicate direction. After initializing, the instance of CMP is handled as what it was.
 
-Each driver can read iPCR/oPCR by transaction in any time. To confirm no drivers handle the device, cmp\_connection\_check\_used() is used. This is a consideration about user-land driver. I also proposed the same idea for user-land driver\footnote{[FFADO-devel] Adjustment between FFADO/ALSA for Firewire drivers  http://sourceforge.net/p/ffado/mailman/message/31856195/}.
+Each driver can read iPCR/oPCR by transaction in any time. To confirm no drivers handle the device, cmp\_connection\_check\_used() is used. This is a consideration about user-land driver. I also proposed the same idea for FFADO\footnote{[FFADO-devel] Adjustment between FFADO/ALSA for Firewire drivers  http://sourceforge.net/p/ffado/mailman/message/31856195/}.
 
 I note that the value of payload field in iPCR is not used to keep bandwidth because some device chip reports a wrong value. Instead of this, snd-firewire-lib uses the value of data\_block\_quadlets member in struct amdtp\_stream.
 
 \subsection{Enhancement for FCP}
 
-This work enables firewire-lib to handle deferred transaction. According to AV/C General specification\cite{avc-general-4-2}, receivers of AV/C command should respond to transmitter within 100 millisecond, while the receivers send an intermediate response within 100 millisecond, and send a final response later. This is deferred transaction. The interval between the intermediate and final response is undefined. But to promise to return to caller, firewire-lib uses 125 millisecond interval.
+This work enables firewire-lib to handle deferred transaction. According to AV/C General specification\cite{avc-general-4-2}, receivers of AV/C command should respond to transmitter within 100 millisecond, while the receivers send an intermediate response within 100 millisecond, and send a final response later. This is deferred transaction. The interval between the intermediate and the final response is undefined. But to promise to return to caller, firewire-lib uses 125 millisecond interval.
 
 Additionally, this work adds three AV/C commands, which seems to be used in some drivers. They are INPUT/OUTPUT SIGNAL FORMAT command and PLUG INFO command in AV/C General specification\cite{avc-general-4-2}.
 
 \section{Driver implementation}
 
-The enhancement of ALSA firewire stack allows to implement new drivers and update existed drivers. In this section, I describe about specifications of these drivers.
+The enhancement of ALSA firewire stack allows to implement new drivers and to update existed drivers. In this section, I describe about specifications of these drivers.
 
 \subsection{Common specifications}
 
-The drivers for Fireworks/BeBoB/OXFW/Dice utilize ALSA firewire stack, therefore they have common specifications due to the stack for each component.
+The drivers for Fireworks/BeBoB/OXFW/Dice utilize ALSA firewire stack, therefore they have common specifications for each component.
 
 \subsubsection{PCM component}
 
 An instance of PCM component in each driver has SND\_PCM\_INFO\_BATCH flag because AMDTP functionality updates hw\_ptr (section \ref{sec:alsa-pcm} to page \pageref{sec:alsa-pcm}) for each PCM period. The timing to elapse PCM period depends on OHCI 1394 hardware interrupt (section \ref{sec:enhancement-amdtp} to page \pageref{sec:enhancement-amdtp}). PCM component also has SND\_PCM\_INFO\_BLOCK\_TRANSFER flag because PCM frames are transferred at each interrupt by the number of data blocks in some packets \footnote{QUEUE\_LENGTH in /sound/firewire/amdtp.c}.
 
-PCM frames are copied to each data blocks in its order and the position of PCM frames in a data block is linear, thus SNDRV\_PCM\_INFO\_INTERLEAVED should be used. If devices supports both streams, in most case, incoming/outgoing AMDTP streams should be the same sampling rate, thus SNDRV\_PCM\_INFO\_JOINT\_DUPLEX should be used. Each drivers should restrict sampling rate for both playback/capture as the same. If current source of clock is not internal or recovered clock (section \ref{sec:clock-recovery} to page \pageref{sec:clock-recovery}), the sampling rate should not be changed.
+PCM frames are copied to each data blocks in its order and the position of PCM frames in a data block is linear, thus SNDRV\_PCM\_INFO\_INTERLEAVED should be used. If devices supports both streams, in most case, incoming/outgoing AMDTP streams should be the same sampling rate, thus SNDRV\_PCM\_INFO\_JOINT\_DUPLEX should be used.
+
+Each drivers should restrict sampling rate for both playback/capture as the same. If current source of clock is not internal or recovered clock (section \ref{sec:clock-recovery} to page \pageref{sec:clock-recovery}), the sampling rate should not be changed.
 
 Currently, SNDRV\_PCM\_HW\_PARAMS\_NO\_PERIOD\_WAKEUP is not used because these drivers have a possibility to stop streaming suddenly due to failure of packet queueing or detection of packet discontinuity. In this case, process with the flag is kept blocking.
 
@@ -1044,7 +1046,7 @@ Fireworks/BeBoB/OXFW/Dice ignores labels of AM824 data, thus each drivers handle
 
 \subsubsection{MIDI component}
 
-MIDI functionality is supported. Most devices have a pair of input/output port but a few devices have several ports. Currently AMDTP functionality supports one MIDI Conformant data channel, thus the maximum number of MIDI ports is restricted by 8.
+MIDI functionality is supported. Most devices have a pair of input/output port but a few devices have several ports. Currently AMDTP functionality supports one MIDI Conformant data channel, thus the maximum number of MIDI ports is restricted by 8\footnote{AMDTP\_MAX\_CHANNELS\_FOR\_MIDI in sound/firewire/amdtp.h}.
 
 \subsubsection{Hwdep component}
 Hwdep functionality is used to the same purpose as Dice driver uses. ALSA applications can execute I/Os to this interface. The API is in include/uapi/sound/firewire.h. The requests are:
@@ -1062,7 +1064,7 @@ This request unlocks the driver's functionality of streaming for user-land drive
 Furthermore, ALSA hwdep applications can receive notifications by reading hwdep interface. The notification is a form of union snd\_firewire\_event. Each kind of this union has "type" member in its first field and tells the type of event to ALSA hwdep applications. The event to starting/stopping streaming by drivers are commonly implemented and the other events depend on each driver.
 
 \subsubsection{Control component}
-For most devices, the drivers has no control functionality. The expected usage of this functionality is to control device's DSP behaviour (section \ref{sec:internal-mixing} to page \pageref{sec:internal-mixing}). But this can be achieved by user-land implementation. For this purpose, currently, ffado-dbus-server/ffado-mixer are one of recommendations.
+Control functionality is used just to get card information, because the drivers basically add no control elements. ALSA control applications, therefore, cannot control device's DSP behaviour (section \ref{sec:internal-mixing} to page \pageref{sec:internal-mixing}). This functionality can be implemented in user-land. For this purpose, currently, ffado-dbus-server/ffado-mixer are one of recommendations.
 
 \subsubsection{Proc information}
 
@@ -1071,7 +1073,7 @@ To help debug, the drivers add proc nodes under the card's "firewire" subdirecto
 
 \subsection{Fireworks driver}
 
-Fireworks driver locates in sound/firewire/fireworks/ and consists of 9 files. When initializing, the driver registers a handler into a certain address on host controller to receive responses of Fireworks transaction. Currently the maximum length of Fireworks transaction is clear as 304 bytes (for isochronous channel mapping), therefore 512 bytes are allocated for the handler including enough space. Fireworks has a command to change the address. But the driver uses the default address for each model because the address space on host controller is an exclusive resource and it's preferable to allocate as small as possible. The structure of Fireworks transaction is in include/uapi/sound/firewire.h.
+Fireworks driver locates in sound/firewire/fireworks/ and consists of 9 files. When initializing, the driver registers a handler into a certain address on host controller to receive responses of Fireworks transaction. Currently the maximum length of Fireworks transaction is clear as 304 bytes (for isochronous channel mapping), therefore 512 bytes are allocated for the handler including enough space. Fireworks has a command to change the address, although the driver uses the default address for each model because the address space on host controller is an exclusive resource and it's preferable to allocate as small as possible. The structure of Fireworks transaction is in include/uapi/sound/firewire.h.
 
 \begin{figure}[H]
 \small
@@ -1098,29 +1100,29 @@ struct snd_efw_transaction {
 \label{uapi-fireworks-transaction}
 \end{figure}
 
-ALSA hwdep applications can transmit request by writing to hwdep interface. Each instance of fireworks driver has a queue to store the responses and ALSA hwdep applications can read them via hwdep interface, too. There is a rule for request that ALSA hwdep applications must use the correct value for 'seqnum' member between 0 to SND\_EFW\_TRANSACTION\_USER\_SEQNUM\_MAX because value of out of the range is used by the driver itself. I note that the driver doesn't implement whole fireworks commands, implements needed commands to maintain streams or help debug. You can see most kinds of fireworks transaction in FFADO\footnote{http://subversion.ffado.org/browser/trunk/libffado/src/fireworks/efc}.
+ALSA hwdep applications can transmit request by writing to hwdep interface. Each instance of fireworks driver has a queue to store the responses and ALSA hwdep applications can read them via hwdep interface, too. There is a rule for request that ALSA hwdep applications must use the correct value for 'seqnum' member between 0 to SND\_EFW\_TRANSACTION\_USER\_SEQNUM\_MAX because value of out of the range is used by the driver itself. I note that the driver implements needed commands to maintain streams or help debug. You can see most kinds of fireworks transaction in FFADO\footnote{http://subversion.ffado.org/browser/trunk/libffado/src/fireworks/efc}.
 
-Fireworks has two modes to transmit AMDTP packets. In Windows mode, the value of dbc in first CIP header is zero and whole the second CIP header is used to indicate timestamp. Another is IEC 61883 mode but this is not fully compliant to IEC 61883-1/6. Additionally, Fireworks has the other quirks. To support such quirks, the driver apply several flags to amdtp structure, but CMP is normal and separately from each direction.
+Fireworks has two modes to transmit AMDTP packets. In Windows mode, the value of dbc in first CIP header is zero and whole the second CIP header is used to indicate timestamp. Another is IEC 61883 mode but this is not fully compliant to IEC 61883-1/6. Additionally, Fireworks has the other quirks. To support such quirks, the driver apply several flags to amdtp structure, while CMP is normal and separately from each direction.
 
 Fireworks has a quirk at bus reset, to restart dbc from zero. To handle this quirk, the driver don't check packet continuity when dbc is zero.
 
 \subsection{BeBoB driver}
 
-BeBoB driver locates under sound/firewire/bebob/ and consists of 12 files. To handle vendor specific operation, the driver has several files for each vendor. Especially, M-Audio largely customized their models and two of them\footnote{Firewire 1814 and ProjectMix I/O} have many specific operations. The two models also has write-only controls, therefore the driver adds ALSA Control interface for the two, as only an exception.
+BeBoB driver locates under sound/firewire/bebob/ and consists of 12 files. To handle vendor specific operation, the driver has several files for each vendor. Especially, M-Audio largely customized their models and two of them\footnote{Firewire 1814 and ProjectMix I/O} have many specific operations. The two models also has write-only controls, therefore the driver adds control elements for the two, as only an exception.
 
 BeBoB has a quirk at bus reset. It transmits packets with disorder just after bus reset. To recover from this discontinuity, the driver uses completion to serialize PCM component .prepare() call and firewire subsystem .update() call.
 
 \subsection{OXFW driver}
 
-OXFW driver may be newly added as a successor of firewire-speakers driver. The driver may be move to sound/firewire/oxfw/ and split to 9 files. Originally, firewire-speakers driver supports PCM playback and two models but OXFW driver may support PCM/MIDI playback and capture, and more models.
+OXFW driver may be newly added as a successor of firewire-speakers driver. The driver may be move to sound/firewire/oxfw/ and split to 9 files. Originally, firewire-speakers driver supports PCM playback and two models but OXFW driver may support more models and PCM/MIDI playback and capture.
 
-The firewire-speakers driver supports ALSA control interface for two models, thus OXFW driver may still support this interface for them. But for the other devices, OXFW driver may not give this interface. Ideally, this functionality should be move to user-land.
+The firewire-speakers driver supports ALSA control elements for two models, thus OXFW driver may still support this interface for them. But for the other devices, OXFW driver may not give this interface. Ideally, this functionality should be move to user-land.
 
 \subsection{Dice driver}
 
 Dice driver may be moved to sound/firewire/dice/ and split to 9 files. Originally, the driver supports PCM playback but may be extended to PCM/MIDI playback and capture.
 
-Dice has its own mechanism to notify status change, therefore the driver gives a way to read the notification via hwdep interface. It's implemented as a type of event I described. ALSA hwdep applications read the event and parse it to know current status.
+Dice has its own mechanism to notify status change, therefore the driver gives a way to read the notification via hwdep interface. It's implemented as a type of event. ALSA hwdep applications read the event and parse it to know current status.
 
 \begin{figure}[H]
 \small
@@ -1135,13 +1137,13 @@ struct snd_firewire_event_dice_notification {
 \label{uapi-dice-notification}
 \end{figure}
 
-The driver allocate a handler when probing each device. The length of Dice notification is just 4 bytes, therefore, it's reasonable to allocate an address for each device.
+The driver allocate a handler to a specific address on host controller when probing each device. The length of Dice notification is just 4 bytes, therefore, it's reasonable to allocate an address for each device.
 
 Dice has a quirk at bus reset not to react any transactions for reconnection. In this reason, the driver stops any streams at bus reset.
 
 \section{Rest of issue}
 
-Currently I focus on enabling ALSA to handle devices. There are still some issues which don't cause big problems.
+Currently I focus on enabling ALSA to handle the devices. There are still some issues which don't cause big problems.
 
 \subsection{OXFW and Dice enhancement}
 
@@ -1157,17 +1159,18 @@ Ideally, the number of PCM frames in a period should be the number of data block
 \begin{figure}[H]
 	\centering
 	\includegraphics{./img/interrupt-period.svg.eps}
-	\caption{{Packets, interrupt and PCM period}}
+	\caption{{Sequences of packets, interrupts and PCM periods}}
 	\label{fig:interrupt-period}
 \end{figure}
 
-To apply severe latency, the interrupt interval should be changed dynamically according to sampling transmission frequency and the number of frames in a period. But this needs correct calculation and estimation for the number of packets till next PCM period. Current implementation uses 5 milliseconds to ensure that at least one interrupt occurs between PCM periods.
+Current implementation uses 5 milliseconds to ensure that at least one interrupt occurs between PCM periods. To apply severe latency, the interrupt interval should be changed dynamically according to sampling transmission frequency and the number of frames in a period. But this needs correct calculation and estimation for the number of packets till next PCM period.
+
 
 \subsection{A lack of delay for timestamp processing}
 
 When incoming/outgoing streams are associated and a device is a clock master, a driver uses the value of SYT field in incoming packet for the field in outgoing packet. If the master and slave handle the same value of SYT field in the same timing, the outgoing packet should include additional delay by the number of data blocks in packets in a queue. 
 
-Current implementation simply copies the value. I have no issues about this with Fireworks/BeBoB/OXFW. To consider maintenance effort, it's better to keep it what it is.
+Current implementation simply copies the value. I have no issues about this with Fireworks/BeBoB/OXFW. To consider maintenance effort, it may be better to keep it what it is.
 
 \subsection{A lack of PCM configuration for virtual surround nodes}
 
@@ -1175,7 +1178,7 @@ ALSA library has configuration files for each PCM component of sound card\footno
 
 Such settings use "route" PCM plugin to resolve a mismatch between the number of actual channels and channels requested by ALSA PCM application. The plugin is designed to have the actual number of channels for its parameters in each configuration file.
 
-But most of firewire devices newly supported have a different number of channels depending on models, sampling frequency and a certain modes even if they utilizes the same device chipset (Section \ref{sec:formation-data-block} to page \pageref{sec:formation-data-block}). In this reason, "route" PCM plugin is not available for the settings of these devices, while it's not better to add configuration files to ALSA library for each model because this idea requires ALSA developers to maintain 100 or more files\footnote{For example, "FWSpeakers.conf" and "FireWave.conf" were added to ALSA library 1.0.25, while they are based on OXFW970/971.}.
+But most of firewire devices newly supported have a different number of channels depending on models, sampling frequency and a certain modes even if they utilizes the same device chipset (Section \ref{sec:formation-data-block} to page \pageref{sec:formation-data-block}). In this reason, "route" PCM plugin is not available for the settings of these devices, while it's better to add no configuration files to ALSA library for each model because this idea requires ALSA developers to maintain 100 or more files\footnote{For example, "FWSpeakers.conf" and "FireWave.conf" were added to ALSA library 1.0.25, while they are based on OXFW970/971.}.
 
 Instead of "route" PCM plugin, "plug" PCM plugin is available for this purpose. The plugin needs no parameters for actual channels. The plugin can resolve the mismatch of channels, as long as ALSA PCM applications open PCM nodes without "SND\_PCM\_NO\_AUTO\_CHANNELS" flag.
 
@@ -1183,9 +1186,7 @@ Unfortunately, PulseAudio uses the flag. PulseAudio fails all of trials to detec
 
 Furthermore, most of these firewire devices have settings for DSP (Section \ref{sec:internal-mixing}). ALSA PCM functionality can cause silence when the settings is wrong. For example, there is a device which receives AMDTP packets with 10 MBLA data channels and an ALSA application uses it as a device with stereo channels. Even if ALSA PCM functionality correctly push PCM samples into the first two data channels and fill zero PCM samples in the rest of data channels, the device can generate no sound or sound in unexpected audio ports according to the settings.
 
-As a result, the variety of data channel make it difficult to unified configuration files, and DSP settings weaken a practical meaning of the configuration.
-
-In these reasons, current ALSA library has no configuration files for the firewire devices newly supported.
+As a result, the variety of data channel make it difficult to unified configuration files, and DSP settings weaken a practical meaning of the configuration. In these reasons, current ALSA library has no configuration files for the firewire devices newly supported.
 
 \subsection{A lack of throttles for MIDI messages in outgoing stream}
 In MIDI specification, its physical layer can transfer 31,250 bit per second. This equals to 3,906 Byte per second. But in IEC 61883-6\cite{iec61883-6-1, iec61883-6-2} and MMA/AMEI RP-027\cite{amei-rp27}, AMDTP stream can transfer MIDI messages by one eighth of sampling transmit frequency (STF). This is really much than MIDI specification, therefore devices must buffer the gap between these data rate.
@@ -1206,23 +1207,30 @@ In MIDI specification, its physical layer can transfer 31,250 bit per second. Th
 	\end{tabular}
 \end{table}
 
-A few devices have buffer-over-flow when receiving much MIDI messages. For example, M-Audio Firewire 1814 transfer discontinuous packets when receiving much MIDI messages. There are some devices which ignores MIDI messages in more than first 8 data blocks in a packet and this seems to be a vendor-specific solution for this issue.
+A few devices have buffer-over-flow when receiving much MIDI messages. For example, M-Audio Firewire 1814 transfer discontinuous packets when receiving much MIDI messages. There are some devices which ignores MIDI messages in more than first 8 data blocks in a packet and this seems to be a solution for this issue in vendor side.
 
 In this reason, ALSA Firewire stack should have a throttle for MIDI messages in outgoing stream.
 
-\subsection{A lack of ALSA control interface}
+\subsection{A lack of control elements for ALSA control interface}
 
 Firewire sound devices needs software implementation to control their DSP behaviour (section \ref{sec:internal-mixing} to page \pageref{sec:internal-mixing}) or device specific features.
 
-Most devices have some ports for audio input and output. Additionally, they can receive some MBLA data channels. Each input from audio ports and MBLA data channels can be multiplexed to each port to audio output. Furthermore, the ratio to multiplex each input to each output is changeable. As a result, this multiplexing functionality has routing settings by the number of available inputs multiplied by the number of available outputs. In FFADO, this feature is called as 'matrix mixer'.
+The most devices have some ports for audio input and output. Additionally, they can receive some MBLA data channels (section \ref{sec:internal-mixing} to page \pageref{sec:internal-mixing}). Each input from audio ports and MBLA data channels can be multiplexed to each port to audio output. Furthermore, the ratio to multiplex each input to each output is changeable. As a result, this multiplexing functionality has routing settings by the number of available inputs multiplied by the number of available outputs. In FFADO, this feature is called as 'matrix mixer'.
 
 Moreover, some devices have its specific features; phantom powering or hardware metering. The way to control these feature depends on models.
 
-But ALSA firewire drivers basically have no ALSA control interface because the functionality can be implemented in user-land as FFADO does. Currently, ffado-dbus-server/ffado-mixer is one of recommendations for this purpose but these are isolated from ALSA applications. Control functionality also has the same issue as PCM functionality has.
+ALSA firewire drivers basically have no ALSA control interface elements because this functionality can be implemented in user-land as FFADO does. Moreover, a few devices have write-only controls, hence there is a need of permanent storage. Current ALSA control interface has no mechanism for the storage.
 
-Like ALSA PCM interface, ALSA Control interface has External Control plugins. It may be possible to give ways to control DSP for ALSA applications with the plugin.
+Currently, ffado-dbus-server/ffado-mixer is one of recommendations for this purpose but they are isolated from ALSA applications. There is an issue for transparency to ALSA applications again.
 
-But there is an issue that a few devices have write-only controls, hence there is a need of permanent storage. Current ALSA control interface has no mechanism for the storage.
+Like ALSA PCM interface, ALSA control interface has External Control plugins. It may be possible to give ways to control DSP for ALSA applications with the plugin.
+
+A control element for the matrix mixer requires 4 parameters; sink ID, source ID, ratio. For this purpose, 'byte' type of ALSA control interface element is better with a certain structure. The plugin should inform the number of sinks/sources and the range of ratio to ALSA control applications.
+
+If it is OK to use no control elements via control interface, it is better to implement this functionality in alsa-tools package, like envy24 or HDSP. 
+
+Anyway, further investigation and discussion are needed for this issue.
+
 
 \subsection{A lack of packet sorting}
 Some Fireworks based devices sometimes transfer packets with disorder, see Figure \ref{fireworks-disorder}. Such sequence of packet is detected as discontinuity and firewire-lib stop streaming.
@@ -1243,22 +1251,22 @@ Index   Payload CIP header 1    CIP header2
 034     210     3F110038        900424E8
 035     210     3F110040        900438E8
 036     002     3F110040        90FFFFFF
-037     210     3F110050        900464E8 <-
-038     210     3F110048        900450E8 <-
+037     210     3F110050 <-     900464E8
+038     210     3F110048 <-     900450E8
 039     210     3F110058        900478E8
 040     002     3F110058        90FFFFFF
-041     210     3F110068        9004A4E8 <-
-042     210     3F110060        900490E8 <-
+041     210     3F110068 <-     9004A4E8
+042     210     3F110060 <-     900490E8
 043     210     3F110070        9004B8E8
 044     002     3F110070        90FFFFFF
-045     210     3F110080        9004E4E7 <-
-046     210     3F110078        9004D0E8 <-
+045     210     3F110080 <-     9004E4E7
+046     210     3F110078 <-     9004D0E8
 \end{verbatim}
 \caption{A sample of packets with disorder transmitted by Fireworks}
 \label{fireworks-disorder}
 \end{figure}
 
-I confirm the disorder does not always occurs less times than correct order. Further investigation is needed for better solution.
+I confirm the disorder occurs less times than correct order. Further investigation is needed for better solution.
 
 \subsection{A few devices freeze when frequent establishing/breaking connections}
 'PreSonus FP10' can freeze when frequent establishing/breaking connections. This brings a disadvantage to PulseAudio. When PulseAudio detects the card, it starts/stops 4 streams at least. Currently PulseAudio cannot detect devices with non-surround channels. But when making PulseAudio detects the device with dbus rule and PulseAudio profiles, it may take the device freezing.
@@ -1388,7 +1396,7 @@ http://www.alsa-project.org/main/index.php/ALSA\_Driver\_Documentation
 \addcontentsline{toc}{section}{Appendices}
 \addtocontents{toc}{\protect\setcounter{tocdepth}{-1}}
 
-\section{Functions of Linux firewire stack}
+\section{Functions of Linux firewire subsystem}
 
 ALSA firewire stack utilize functions exported by Linux firewire stack. In this appendix, I describe the functions.
 
@@ -1400,7 +1408,7 @@ void fw_iso_resource_manage(struct fw_card *card, int generation,
                             int *bandwidth, bool allocate);
 \end{verbatim}
 
-This function allocates or deallocates a channel and/or bandwidth for resources of isochronous communication, to run transactions to CSR\_CHANNELS\_AVAILABLE and CSR\_BANDWIDTH\_AVAILABLE in Isochronous Resource Manager.
+This function allocates or deallocates a channel and/or bandwidth for resources of isochronous communication by transactions to CSR\_CHANNELS\_AVAILABLE and CSR\_BANDWIDTH\_AVAILABLE in Isochronous Resource Manager.
 
 \begin{verbatim}
 void fw_schedule_bus_reset(struct fw_card *card, bool delayed,
@@ -1412,6 +1420,13 @@ This function schedules bus reset on OHCI 1394 controller.
 \subsection{Firewire subsystem transaction services}
 
 \begin{verbatim}
+typedef void (*fw_address_callback_t)(struct fw_card *card,
+                                      struct fw_request *request,
+                                      int tcode, int destination, int source,
+                                      int generation,
+                                      unsigned long long offset,
+                                      void *data, size_t length,
+                                      void *callback_data);
 struct fw_address_handler {
         u64 offset;
         u64 length;
@@ -1465,7 +1480,7 @@ This structure describes DMA mapped pages for OHCI 1394 isochronous context. The
 
 \begin{verbatim}
 struct fw_iso_context *fw_iso_context_create(struct fw_card *card,
-                        int type, int channel, int speed, size\_t header_size,
+                        int type, int channel, int speed, size_t header_size,
                         fw_iso_callback_t callback, void *callback_data);
 \end{verbatim}
 
@@ -1483,7 +1498,7 @@ struct fw_iso_packet {
 };
 \end{verbatim}
 
-This structure basically describes IEEE 1394 Isochronous Packet. An 'interrupt' member is to generate software interrupt (tasklet) from hardware interrupt of OHCI 1394. If the value of 'interrupt' member is 1 in every 16 packets, it means that the software interrupt is generated every 16 packets handled by OHCI 1394 controller.
+This structure basically represents IEEE 1394 Isochronous Packet. An 'interrupt' member is to generate from hardware interrupt of OHCI 1394. If the value of 'interrupt' member is 1 in every 16 packets, it means that the hardware interrupt is generated every 16 packets handled by OHCI 1394 controller.
 
 \begin{verbatim}
 int fw_iso_context_queue(struct fw_iso_context *ctx,
@@ -1492,7 +1507,7 @@ int fw_iso_context_queue(struct fw_iso_context *ctx,
                          unsigned long payload);
 \end{verbatim}
 
-This function queueing given packet for isochronous context. The members of 'struct fw\_iso\_packet' are copied to DMA buffer for OHCI 1394 descriptor.
+This function queueing given a packet to isochronous context with the buffer. The members of 'struct fw\_iso\_packet' are copied to DMA buffer for OHCI 1394 descriptor.
 
 \begin{verbatim}
 void fw_iso_context_queue_flush(struct fw_iso_context *ctx);
@@ -1545,30 +1560,30 @@ struct iso_packets_buffer {
 };
 int iso_packets_buffer_init(struct iso_packets_buffer *b, struct fw_unit *unit,
                             unsigned int count, unsigned int packet_size,
-                            enum dma\_data_direction direction);
+                            enum dma_data_direction direction);
 void iso_packets_buffer_destroy(struct iso_packets_buffer *b,
                                 struct fw_unit *unit);
 \end{verbatim}
 
-This structure includes 'struct fw\_iso\_buffer' and non-tag structure. The non-tag structure consists of pointer and offset to access the content of memory pages in packet unit. The 'iso\_packets\_buffer\_init()' function calculates the number of memory page frames with 'packet\_size' argument, 'count' argument, L1\_CACHE\_ALIGN() and PAGE\_SIZE and keep the pages for DMA with 'fw\_iso\_buffer\_init()'. The 'iso\_packets\_buffer\_destroy()' releases these.
+This structure includes 'struct fw\_iso\_buffer' and non-tag structure. The non-tag structure consists of pointer and offset to access the content of memory pages in packet unit. The 'iso\_packets\_buffer\_init()' function calculates the number of memory page frames with 'packet\_size' argument, 'count' argument, L1\_CACHE\_ALIGN() and PAGE\_SIZE, then keeps the pages for DMA with 'fw\_iso\_buffer\_init()'. The 'iso\_packets\_buffer\_destroy()' releases the structure.
 
-\subsection{Isochronous Rresource Management helper functions}
+\subsection{Isochronous Resource Management helper functions}
 
 These functions are in sound/firewire/iso-resources.\{c,h\}.
 
 \begin{verbatim}
 struct fw_iso_resources {
         u64 channels_mask;
-        struct fw\_unit *unit;
+        struct fw_unit *unit;
         struct mutex mutex;
         unsigned int channel;
         unsigned int bandwidth;
-        unsigned int bandwidth\_overhead;
+        unsigned int bandwidth_overhead;
         int generation;
         bool allocated;
 };
 int fw_iso_resources_init(struct fw_iso_resources *r,
-			  struct fw_unit *unit);
+                          struct fw_unit *unit);
 void fw_iso_resources_destroy(struct fw_iso_resources *r);
 int fw_iso_resources_allocate(struct fw_iso_resources *r,
                               unsigned int max_payload_bytes, int speed);
@@ -1577,7 +1592,7 @@ void fw_iso_resources_free(struct fw_iso_resources *r);
 \end{verbatim}
 
 The structure 'fw\_iso\_resources' represents an manager for isochronous resource such like channel and bandwidth. The 'fw\_iso\_resources\_init()' initializes it and 'fw\_iso\_resources\_destroy()' release it.
-The 'fw\_iso\_resources\_allocate()' keeps isochronous resources with given 'max\_payload\_bytes' and 'speed'. The 'fw\_iso\_resources\_update()' reallocate isochronous resources to handle bus reset. The 'fw\_iso\_resources\_free()' releases isochronous resources. Most operations utilizes 'fw\_iso\_resource\_manage()' in Linux Firewire Subsystem.
+The 'fw\_iso\_resources\_allocate()' keeps isochronous resources with given 'max\_payload\_bytes' and 'speed'. The 'fw\_iso\_resources\_update()' reallocate isochronous resources to handle bus reset. The 'fw\_iso\_resources\_free()' releases isochronous resources. Most operations utilizes 'fw\_iso\_resource\_manage()' in Linux firewire subsystem.
 
 \subsection{CMP helper functions}
 
@@ -1605,14 +1620,14 @@ int cmp_connection_init(struct cmp_connection *connection,
 int cmp_connection_check_used(struct cmp_connection *connection, bool *used);
 void cmp_connection_destroy(struct cmp_connection *connection);
 int cmp_connection_establish(struct cmp_connection *connection,
-			     unsigned int max_payload);
+                             unsigned int max_payload);
 int cmp_connection_update(struct cmp_connection *connection);
 void cmp_connection_break(struct cmp_connection *connection);
 \end{verbatim}
 
 The 'struct cmp\_connection' includes parameters related to CMP such like PCR index. The 'cmp\_connection\_init()' check Output/Input MPR by a READ transaction according to given 'direction' and 'pcr\_index', then initialize 'resources' member. The 'cmp\_connection\_destroy()' release these structures. The 'cmp\_connection\_establish()' keeps isochronous resources and establishes a connection by a LOCK transaction. The 'cmp\_connection\_update()' updates a connection by a LOCK transaction to handle bus reset. The 'cmp\_connection\_break()' breaks an established connection by a LOCK transaction. The connection should be broken before destroyed.
 
-The 'cmp\_connection\_check\_used()' is a bit special. This is added for relationships to drivers in user-space. When the drivers handle devices, the caller of this function can check the driver's connection as long as the devices are compliant to CMP.
+The 'cmp\_connection\_check\_used()' is a bit special. This is added for relationships to drivers in user-space. When the drivers handle devices, the caller of this function can check the driver's connection.
 
 \subsection{AMDTP stream helper functions}
 
@@ -1620,8 +1635,8 @@ These functions are in sound/firewire/amdtp.\{c,h\}.
 
 \begin{verbatim}
 enum amdtp_stream_direction {
-        AMDTP\_OUT_STREAM = 0,
-        AMDTP\_IN_STREAM
+        AMDTP_OUT_STREAM = 0,
+        AMDTP_IN_STREAM
 };
 enum cip_flags {
         CIP_NONBLOCKING         = 0x00,
@@ -1681,10 +1696,10 @@ struct amdtp_stream {
 };
 \end{verbatim}
 
-This structure represents an AMDTP stream. An AMDTP stream can transfer one PCM substream and 8 MIDI substreams. Currently this structure is for AM824 data. The 'buffer' member is for continuous packet buffer, and the 'index' is for handling the continuous packets. The 'sfc' and 'syt\_interval' are dominant parameters. These parameters are decided by stream's nominal sampling rate:
+This structure represents an AMDTP stream. Currently this structure is for AM824 data. An AMDTP stream can transfer one PCM substream and 8 MIDI substreams. The 'buffer' member is for continuous packet buffer, and the 'index' member is for handling the continuous packets. The 'sfc' and 'syt\_interval' are dominant parameters. These parameters are decided by stream's nominal sampling rate:
 
 \begin{verbatim}
-enum cip_sfc \{
+enum cip_sfc {
         CIP_SFC_32000  = 0,
         CIP_SFC_44100  = 1,
         CIP_SFC_48000  = 2,
@@ -1693,7 +1708,7 @@ enum cip_sfc \{
         CIP_SFC_176400 = 5,
         CIP_SFC_192000 = 6,
         CIP_SFC_COUNT
-\};
+};
 extern const unsigned int amdtp_syt_intervals[CIP_SFC_COUNT] = {
         [CIP_SFC_32000]  =  8,
         [CIP_SFC_44100]  =  8,
@@ -1708,11 +1723,11 @@ extern const unsigned int amdtp_syt_intervals[CIP_SFC_COUNT] = {
 
 The 'source\_node\_id\_field', 'data\_block\_quadlets', 'data\_block\_counter' are for CIP header. The 'tx\_dbc\_interval' is for a device-specific quirk which has fixed interval for the value of data block counter, not compliant to IEC 61883-1.
 
-The 'transfer\_delay', 'data\_block\_state', 'last\_syt\_offset', 'syt\_offset\_state' are used to generate the value of SYT field in non-blocking mode in simplex streams without timestamp synchronization. The 'syc\_slave' is used for blocking mode with duplex streams with timestamp synchronization to handle timestamps in incoming packets to outgoing packets.
+The 'transfer\_delay', 'data\_block\_state', 'last\_syt\_offset', 'syt\_offset\_state' are used to generate the value of SYT field in non-blocking mode without timestamp synchronization. The 'sync\_slave' is used for blocking mode with duplex streams with timestamp synchronization to handle timestamps in incoming packets to outgoing packets.
 
 The 'callbacked' and 'callback\_wait' are used to wait till a first packet is available.
 
-The 'pcm' and 'transfer\_samples' members are used to multiplex/demultiplex PCM samples into an AMDTP packet. The 'pcm\_buffer\_pointer', 'pcm\_period\_pointer', 'pointer\_flush', 'period\_tasklet' are used for 'snd\_pcm\_period\_elapsed()'.
+The 'pcm' and 'transfer\_samples' members are used to multiplex/demultiplex PCM samples into an AMDTP packet. The 'pcm\_buffer\_pointer', 'pcm\_period\_pointer', 'pointer\_flush', 'period\_tasklet' are used to call 'snd\_pcm\_period\_elapsed()' in period boundary.
 
 The 'midi' member is used to multiplex/demultiplex MIDI message into an AMDTP packet. The 'rx\_blocks\_for\_midi' is for a model-specific quirk to ignore MIDI messages in data blocks more than a certain numbers in a packet.
 
@@ -1730,7 +1745,9 @@ int amdtp_stream_init(struct amdtp_stream *s, struct fw_unit *unit,
 
 The 'amdtp\_stream\_init()' initializes members in the structure. This function gets reference counter from given 'struct fw\_unit'. The 'dir' and 'flags' are important for an AMDTP stream.
 
-void amdtp\_stream\_destroy(struct amdtp\_stream *s);
+\begin{verbatim}
+void amdtp_stream_destroy(struct amdtp_stream *s);
+\end{verbatim}
 
 The 'amdtp\_stream\_destroy()' clear some members in the structure. This function put reference counter to given 'struct fw\_unit'. The caller is sure to stop the stream in advance.
 
@@ -1738,10 +1755,10 @@ The 'amdtp\_stream\_destroy()' clear some members in the structure. This functio
 void amdtp_stream_set_parameters(struct amdtp_stream *s,
                                  unsigned int rate,
                                  unsigned int pcm_channels,
-                                 unsigned int midi\_ports);
+                                 unsigned int midi_ports);
 \end{verbatim}
 
-The 'amdtp\_stream\_set\_parameters()' set parameters to given stream structure. As a result, the stream structure has 'sfc', 'syt\_interval', 'pcm\_channels', 'midi\_ports', 'data\_block\_quadlets', 'transfer\_delay'. This function also initializes 'pcm\_positions' and 'midi\_positions' according to IEC 61883-6:2005.
+The 'amdtp\_stream\_set\_parameters()' sets parameters to given stream structure. As a result, the stream structure has values in 'sfc', 'syt\_interval', 'pcm\_channels', 'midi\_ports', 'data\_block\_quadlets', 'transfer\_delay' fields. This function also initializes 'pcm\_positions' and 'midi\_positions' according to IEC 61883-6:2005.
 
 \begin{verbatim}
 unsigned int amdtp_stream_get_max_payload(struct amdtp_stream *s);
@@ -1875,7 +1892,7 @@ int snd_fw_transaction(struct fw_unit *unit, int tcode,
                        unsigned int flags);
 \end{verbatim}
 
-This function is a helper for an asynchronous transaction. Usually this function retries three times if the transaction is failed because of error or bus\_reset. The flag 'FW\_FIXED\_GENERATION' returns error if the transaction is failed because of bus reset. The flag 'FW\_QUIET' suppress error message.
+This function is a helper for an asynchronous transaction. Usually this function retries three times if the transaction is failed because of error or bus\_reset. With the flag 'FW\_FIXED\_GENERATION', this function doesn't retry and returns error if bus reset occurs. The flag 'FW\_QUIET' suppress error message.
 
 \subsection{FCP helper functions}
 
@@ -1888,7 +1905,7 @@ int fcp_avc_transaction(struct fw_unit *unit,
                         unsigned int response_match_bytes);
 \end{verbatim}
 
-The 'fcp\_avc\_transaction()' sends an AV/C command frame to the target and wait for the corresponding response frame. The 'response\_match\_bytes' is a bitmap to match frames of command/response in bytes unit. This function supports deferred transaction in AV/C Digital Interface Command Set General Specification.
+The 'fcp\_avc\_transaction()' sends an AV/C command frame to the target and wait for the corresponding response frame. The 'response\_match\_bytes' is a bitmap to match frames of command/response in bytes unit. This function supports deferred transaction in AV/C General\cite{avc-general-4-2}.
 
 \begin{verbatim}
 void fcp_bus_reset(struct fw_unit *unit);
@@ -1902,6 +1919,7 @@ The 'fcp\_bus\_reset()' is used to handle bus reset. All of pending AV/C transac
 These functions are in sound/firewire/fcp.\{c,h\}.
 
 \begin{verbatim}
+#define AVC_PLUG_INFO_BUF_BYTES 4
 enum avc_general_plug_dir {
         AVC_GENERAL_PLUG_DIR_IN         = 0,
         AVC_GENERAL_PLUG_DIR_OUT        = 1,
@@ -1912,7 +1930,7 @@ int avc_general_get_plug_info(struct fw_unit *unit, unsigned int subunit_type,
                               u8 info[AVC_PLUG_INFO_BUF_BYTES]);
 \end{verbatim}
 
-The 'avc\_general\_plug\_dir()' is used to get plug information according to AV/C Digital Interface Command Set General Specification. Extended addressing is not supported.
+The 'avc\_general\_plug\_dir()' is used to get plug information according to AV/C General\cite{avc-general-4-2}. Extended addressing is not supported.
 
 \begin{verbatim}
 int avc_general_set_sig_fmt(struct fw_unit *unit, unsigned int rate,
@@ -1923,6 +1941,6 @@ int avc_general_get_sig_fmt(struct fw_unit *unit, unsigned int *rate,
                             unsigned short plug);
 \end{verbatim}
 
-The 'avc\_general\_set\_sig\_fmt()' and 'avc\_general\_get\_sig\_fmt()' are used to set/get current sampling rate according to AV/C Digital Interface Command Set General Specification. Extended addressing is not supported.
+The 'avc\_general\_set\_sig\_fmt()' and 'avc\_general\_get\_sig\_fmt()' are used to set/get current sampling rate according to AV/C General\cite{avc-general-4-2}. Extended addressing is not supported.
 
 \end{document}
