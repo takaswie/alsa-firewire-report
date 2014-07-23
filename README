@@ -4,12 +4,12 @@ Enhancement of ALSA firewire stack
 
 Description
 ========
-June 2014, ALSA, Linux sound subsystem, gained an enhancement of support for Firewire sound devices, and Linux 3.16 merged it. This is a report about my work for the enhancement, including my memo.
+June 2014, ALSA, Linux sound subsystem, merged an enhancement of support for Firewire sound devices, and it was pulled to Linux 3.16. This is a report about my work for the enhancement, including my memo.
 
 
 Status
 ========
-Under writing the whole section.
+Under reviewing the whole section.
 
 I have a little experiences for technical writing and English writing. This report may include mistakes in grammar. I'm happy if you inform such mistakes to me.
 
