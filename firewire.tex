@@ -1221,7 +1221,7 @@ The most devices have some ports for audio input and output. Additionally, they 
 
 Moreover, some devices have its specific features; phantom powering or hardware metering. The way to control these feature depends on models.
 
-ALSA firewire drivers basically have no ALSA control interface elements because this functionality can be implemented in user-land as FFADO does. Moreover, a few devices have write-only controls, hence there is a need of permanent storage. Current ALSA control interface has no mechanism for the storage.
+ALSA firewire drivers basically have no control elements for ALSA control interface because this functionality can be implemented in user-land as FFADO does. Moreover, a few devices have write-only controls, hence there is a need of permanent storage. Current ALSA control interface has no mechanism for the storage.
 
 Currently, ffado-dbus-server/ffado-mixer is one of recommendations for this purpose but they are isolated from ALSA applications. There is an issue for transparency to ALSA applications again.
 
