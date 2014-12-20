@@ -18,3 +18,8 @@ clean:
 	rm firewire.log
 	rm firewire.toc
 	rm firewire.pdf
+
+jp:	image
+	platex firewire-jp.tex
+	platex firewire-jp.tex
+	dvipdfmx firewire-jp
