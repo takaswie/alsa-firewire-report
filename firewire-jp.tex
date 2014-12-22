@@ -954,43 +954,44 @@ snd-firewire-libがストリーミングの持続に失敗する場合がある�
 2013年現在、この機能はドライバーがタイミングスレーブとして振る舞うことを許可していない。タイミングスレーブは入力パケットのSYTフィールドから出力パケットのSYTフィールドの値を生成しなければならない (\pageref{sec:duplex-streams}ページの\ref{sec:duplex-streams}章) が、この機能は入力ストリームをサポートしていないからだ。従ってこの機能は、SYTフィールドの値と1パケットのデータブロック数の生成器を持つ。これらの値は互いに関係するからだ。
 
 
-\section{Enhancement of ALSA firewire stack}
+\section{ALSAのfirewireスタックの改良}
 
-As of 2013, this stack is only for AMDTP outgoing stream (received stream in device side) in both blocking/non-blocking mode. In detail,
+2013年時点で、このスタックはAMDTP出力ストリーム - デバイスの視点に立てば受信ストリーム - のみを、blocking/non-blockingモードのどちらでもサポートする。詳細を見ると:
+
 \begin{itemize}
-\item CMP functionality handles iMPR/iPCR only
-\item AMDTP functionality handles isochronous outgoing context only
-\item AMDTP packets can transfer PCM frames only
-\item The value of SYT field in packets from device is not available for outgoing packet
+\item iMPR/iPCRだけを扱うCMP機能
+\item アイソクロナス出力コンテキストだけを扱うAMDTP機能
+\item PCMフレームだけを転送するAMDTPパケット
+\item 入力パケットのSYTフィールド値を出力パケットに利用できない。
 \end{itemize}
 
-To support more devices, this stack requires these functionalities:
+より多くのデバイスをサポートするために、このスタックは以下の機能を必要とする:
 \begin{itemize}
-\item Handling oMPR/oPCR
-\item Handling isochronous incoming context
-\item Handling several data in an AMDTP packet, like MIDI
-\item Handling duplex streams with timestamp synchronization
+\item oMPR/oPCRを扱う機能
+\item アイソクロナス入力コンテキストを扱う機能
+\item MIDIのような、様々なデータをAMDTPパケットで扱う機能
+\item タイムスタンプ同期を伴う全二重ストリーム
 \end{itemize}
 
-Additionally, each driver requires these functionalities:
+加えて、それぞれのドライバーは以下の機能を必要とする:
 \begin{itemize}
-\item Retrieving device capabilities and parsing them to make PCM runtime rules
-\item Maintaining duplex streams
-\item PCM component for both of playback and capture
-\item MIDI component for both of playback and capture
-\item Handling model specific operations and quirks
+\item デバイスのケーパビリティを取得しそれをパースし、PCMランタイムルールを作る機能
+\item 全二重ストリームのサポート
+\item 再生と録音、両方をサポートするPCMコンポーネント
+\item 再生と録音、両方をサポートするMIDIコンポーネント
+\item モデル固有の操作と癖を扱う機能
 \end{itemize}
 
-Furthermore, each driver should prevent from disturbing user-land drivers. Dice driver already gives these functionalities via hwdep interface:
+更に、それぞれのドライバーはユーザーランドドライバーを妨害してはならない。Diceドライバーは既に、hwdepインターフェイスを通じて以下の機能を提供している:
 \begin{itemize}
-\item Giving firewire node information corresponding to ALSA card
-\item Notifying to start/stop streaming
-\item Locking/Unlocking streaming
+\item ALSAカードに伴うfirewireノード情報を提供する機能
+\item ストリーミングの開始、終了を通知する機能
+\item ストリーミングのロックと解放
 \end{itemize}
 
-Comparing to an idea to implement drivers in user-land, an idea to implement it in kernel-land has less issues of communication to ALSA application because this idea can use ALSA Core. This idea gives good transparency to ALSA applications. Moreover, there's already ALSA firewire stack for firewire drivers. The stack has a lack of some requirements, while an enhancement of the stack is less work than implementing it in user-land.
+ドライバーをユーザーランドに実装するという発想と比較すると、カーネルランドに実装するという発想の方が、ALSA Coreを使うことができるため、ALSAアプリケーションとの通信において課題がより少ない。この発想はALSAアプリケーションによりよい見通しを与える。更に、すでにALSAのfirewireスタックがある。このスタックはいくつかの要求を満たさないものの、ユーザーランドにドライバーを実装するよりも少ない労力で改良できる。
 
-I started the works for this idea in the beginning of 2013, and the works are merged to ALSA upstream May 2014. It takes one and a half years. June 2014, at Linux 3.16 merge window, ALSA maintainer pushed the work into Linux upstream. The patchset for the work consists of many patches. The first 18 patches are for snd-firewire-lib, AMDTP, CMP and FCP. The next 14 patches are for fireworks driver. The next 16 patches are for bebob driver. The rest of patches are for correction.
+私はこの発想に基づき、2013年にこの仕事を始めた。この仕事は2014年にALSAの上流にマージされた。1年半かかっている。2014年6月のLinux 3.16のマージウィンドウにおいて、ALSAのメンテナーはこの仕事をLinuxの上流にプッシュされた。この仕事のパッチセットはたくさんのパッチに沸かれている。最初の18パッチはsnd-firewire-libのAMDTP、CMP、FCPのためのものだ。次の14パッチはfireworksドライバーの、続く16パッチはBeBoBドライバーのためのものだ。残りのパッチはバグ修正だ。
 
 \subsection{Enhancement for AMDTP}
 
