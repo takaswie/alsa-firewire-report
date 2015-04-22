@@ -1,0 +1,428 @@
+\documentclass[onecolumn]{article}
+\usepackage{array,booktabs,bytefield}
+\usepackage{graphicx, here}
+\begin{document}
+
+\pagenumbering{roman}
+
+\title{Control functionality for firewire devices}
+\author{Takashi Sakamoto}
+\date{2015/04/22}
+\maketitle{}
+
+\begin{abstract}
+
+hoge
+
+\end{abstract}
+
+\section*{Acknowledgement}
+
+\newpage
+
+\tableofcontents
+
+\newpage
+
+\pagenumbering{arabic}
+
+\section{Introduction}
+
+\section{Firewire sound device model}
+
+
+
+\section{Implementations of each chipset}
+
+\subsection{BeBoB}
+
+\subsection{Fireworks}
+
+\subsection{OXFW}
+
+\subsection{Dice}
+
+\subsection{Digidesign 002/003 family}
+
+\subsection{TASCAM FireWire series}
+
+\section{FFADO control functionality}
+
+\subsection{libffado}
+
+\subsection{FFADO D-bus interface}
+
+\subsection{FFADO D-bus server}
+
+\subsection{FFADO Mixer}
+
+\section{}
+
+\section{Linux firewire subsystem}
+
+\subsection{fw character devices}
+
+
+\section{ALSA Control Component and Interface}
+
+ALSA includes some components corresponds to each functionality of actual sound devices\footnote{alsa-firewire-report}. One of the components is responsible for control functionality. It's Control Component and Interface.
+
+In this section, I describe the Control Component and Control Interface.
+
+\subsection{ALSA Control Component and Element set}
+
+In ALSA, each card instance has a role as a ALSA Control Component, thus it's no need for each driver to add some additional instances for Control Component itself.
+
+\begin{figure}[htbp]
+\small
+\begin{verbatim}
+struct snd_card {
+    ....
+    struct device ctl_dev;
+    unsigned int last_numid;
+    struct rw_semaphore controls_rwsem;
+    rwlock_t ctl_files_rwlock;
+    int controls_count;
+    int user_ctl_count;
+    struct list_head controls;
+    struct list_head ctl_files;
+    struct mutex user_ctl_lock;
+    ....
+};
+\end{verbatim}
+\caption{{Members related to control component in structure of card}}
+\label{alsa-card-structure}
+\end{figure}
+
+Each controllable substance of actual card is represented as control elements. To manage the control elements, \'struct snd\_kcontrol\' is defined. Typically, each driver implementation adds some instances of this structure. Then, corresponding card instance keeps the instances in a list named as \'controls\'.
+
+\begin{figure}[htbp]
+\small
+\begin{verbatim}
+struct snd_kcontrol {
+    struct list_head list;
+    struct snd_ctl_elem_id id;
+    unsigned int count;
+    snd_kcontrol_info_t *info;
+    snd_kcontrol_get_t *get;
+    snd_kcontrol_put_t *put;
+    union {
+        snd_kcontrol_tlv_rw_t *c;
+        const unsigned int *p;
+    } tlv;
+    unsigned long private_value;
+    void *private_data;
+    void (*private_free)(struct snd_kcontrol *kcontrol);
+    struct snd_kcontrol_volatile vd[0];    /* volatile data */
+};
+\end{verbatim}
+\caption{{Members related to control component in structure of card}}
+\label{alsa-card-structure}
+\end{figure}
+
+This structure includes an important member to consider about ALSA control design. Its \'count\'member.
+
+This member represents the number of elements in this instance. Therefore, this structure can represents a single control elements, while can also represents elements with the same feature. In this instance, each element can have its own state. This design is originally for control substances represented by a register in which a read or write operation handle. In this report, this structure or instance are referred as 'element set'.
+
+\subsubsection{Element identification}
+
+To indicate each element in this element set, \'id\' member is used. The \'structure snd\_ctl\_elem\_id\' includes enough information to identify each element.
+
+\begin{figure}[htbp]
+\small
+\begin{verbatim}
+struct snd_ctl_elem_id {
+    unsigned int numid;
+    snd_ctl_elem_iface_t iface;
+    unsigned int device;
+    unsigned int subdevice;
+    unsigned char name[44];
+    unsigned int index;
+};
+\end{verbatim}
+\caption{{Identical information of each control element}}
+\label{control-element-id}
+\end{figure}
+
+There're two combinations of these members to identify an element. One is just numid, another is a combination of the rest.
+
+When added to a card instance, an element set gets unique numerical number, then included elements also gain numerical numbers incremented by its order inner the element set. Therefore, one element can be identified by one numerical number.
+
+One element set must be named, then included elements also has the same name. Therefore, each element is not identified just by the name. This is a main reason that the structure includes \'index\' member. The value of this member is used for offset from the first element of the element set. 
+
+\begin{figure}[htbp]
+\small
+\begin{verbatim}
+typedef int __bitwise snd_ctl_elem_iface_t;
+#define SNDRV_CTL_ELEM_IFACE_CARD       ((__force snd_ctl_elem_iface_t) 0)
+#define SNDRV_CTL_ELEM_IFACE_HWDEP      ((__force snd_ctl_elem_iface_t) 1)
+#define SNDRV_CTL_ELEM_IFACE_MIXER      ((__force snd_ctl_elem_iface_t) 2)
+#define SNDRV_CTL_ELEM_IFACE_PCM        ((__force snd_ctl_elem_iface_t) 3)
+#define SNDRV_CTL_ELEM_IFACE_RAWMIDI    ((__force snd_ctl_elem_iface_t) 4)
+#define SNDRV_CTL_ELEM_IFACE_TIMER      ((__force snd_ctl_elem_iface_t) 5)
+#define SNDRV_CTL_ELEM_IFACE_SEQUENCER  ((__force snd_ctl_elem_iface_t) 6)
+#define SNDRV_CTL_ELEM_IFACE_LAST       SNDRV_CTL_ELEM_IFACE_SEQUENCER
+\end{verbatim}
+\caption{{All types of interface for control element}}
+\label{element-interface-type}
+\end{figure}
+
+Furthermore, element set must have interface type for its purpose. 6 types of interfaces are defined. According to ALSA driver implementation guide\cite{alsa-driver}, SNDRV\_CTL\_ELEM\_IFACE\_MIXER is usually used. SNDRV\_CTL\_ELEM\_IFACE\_CARD is used for global controls which does not belong to mixer functionality. When the controls are closely associated with certain ALSA components, the other types of interfaces. In this case, \'device\' and \'subdevice\' fields should be used to indicate the associated components.
+
+Therefore, The combination of \'iface\', \'device\', \'subdevice\', \'name\', \'index\' can be used instead of \'numid\' to indicate an element.
+
+\subsubsection{ALSA control element set information}
+
+Information of element set is defined
+
+\begin{figure}[htbp]
+\small
+\begin{verbatim}
+struct snd_ctl_elem_info {
+    struct snd_ctl_elem_id id;
+    snd_ctl_elem_type_t type;
+    unsigned int access;
+    unsigned int count;
+    __kernel_pid_t owner;
+    union {
+        struct {
+            long min;
+            long max;
+            long step;
+        } integer;
+        struct {
+            long long min;
+            long long max;
+            long long step;
+        } integer64;
+        struct {
+            unsigned int items;
+            unsigned int item;
+            char name[64];
+            __u64 names_ptr;
+            unsigned int names_length;
+        } enumerated;
+        unsigned char reserved[128];
+    } value;
+    union {
+        unsigned short d[4];
+        unsigned short *d_ptr;
+    } dimen;
+    unsigned char reserved[64-4*sizeof(unsigned short)];
+};
+\end{verbatim}
+\caption{{Structure for control element set information}}
+\label{element-set-info-structure}
+\end{figure}
+
+\begin{figure}[htbp]
+\small
+\begin{verbatim}
+typedef int __bitwise snd_ctl_elem_type_t;
+#define SNDRV_CTL_ELEM_TYPE_NONE    ((__force snd_ctl_elem_type_t) 0)
+#define SNDRV_CTL_ELEM_TYPE_BOOLEAN    ((__force snd_ctl_elem_type_t) 1)
+#define SNDRV_CTL_ELEM_TYPE_INTEGER    ((__force snd_ctl_elem_type_t) 2)
+#define SNDRV_CTL_ELEM_TYPE_ENUMERATED    ((__force snd_ctl_elem_type_t) 3)
+#define SNDRV_CTL_ELEM_TYPE_BYTES    ((__force snd_ctl_elem_type_t) 4)
+#define SNDRV_CTL_ELEM_TYPE_IEC958    ((__force snd_ctl_elem_type_t) 5)
+#define SNDRV_CTL_ELEM_TYPE_INTEGER64    ((__force snd_ctl_elem_type_t) 6)
+#define SNDRV_CTL_ELEM_TYPE_LAST    SNDRV_CTL_ELEM_TYPE_INTEGER64
+\end{verbatim}
+\caption{{Types of control element set}}
+\label{element-set-types}
+\end{figure}
+
+\subsubsection{Channel values for ALSA control element}
+
+\subsubsection{ALSA control element set added by kernel-land driver}
+
+When adding new element sets, ALSA kernel-land drivers call snd\_ctl\_new1() with a template. The template is represented by \'struct snd\_kcontrol\_new\'.
+
+\begin{figure}[htbp]
+\small
+\begin{verbatim}
+struct snd_kcontrol_new {
+    snd_ctl_elem_iface_t iface;
+    unsigned int device;
+    unsigned int subdevice;
+    const unsigned char *name;
+    unsigned int index;
+    unsigned int access;
+    unsigned int count;
+    snd_kcontrol_info_t *info;
+    snd_kcontrol_get_t *get;
+    snd_kcontrol_put_t *put;
+    union {
+        snd_kcontrol_tlv_rw_t *c;
+        const unsigned int *p;
+    } tlv;
+    unsigned long private_value;
+};
+\end{verbatim}
+\caption{{Template structure for control element}}
+\label{control-element-template}
+\end{figure}
+
+This structure includes enough members to build an instance of ALSA control element set. Some operations of the element set is implemented as four callback functions. According to ALSA driver implementation guide\cite{alsa-driver}, the purposes of these callback functions are:
+
+\begin{description}
+\small
+\item[snd\_kcontrol\_info\_t] \mbox{} \\
+For detail information about the element set
+\item[snd\_kcontrol\_get\_t] \mbox{} \\
+For read operation of the element set
+\item[snd\_kcontrol\_put\_t] \mbox{} \\
+For write operation of the element set
+\item[snd\_kctl\_tlv\_rw\_t] \mbox{} \\
+For threshold level operation of the element set
+\end{description}
+
+In info callback function, each driver should fill enough members of \'struct snd\_ctl\_elem\_info\'. This structure includes union field to describe parameters for each types of element set.
+
+\subsection{Threshold level representation}
+
+To describe information about threshold level, 
+
+
+\subsubsection{ALSA control element set added by user-land driver}
+
+ALSA control interface allows userspace applications to add/replace/remove control element sets into registered card instances. The operation is implemented in ioctl(2) commands.
+
+\begin{figure}[htbp]
+\small
+\begin{verbatim}
+#define SNDRV_CTL_IOCTL_ELEM_ADD        _IOWR('U', 0x17, struct snd_ctl_elem_info)
+#define SNDRV_CTL_IOCTL_ELEM_REPLACE    _IOWR('U', 0x18, struct snd_ctl_elem_info)
+#define SNDRV_CTL_IOCTL_ELEM_REMOVE     _IOWR('U', 0x19, struct snd_ctl_elem_id)
+\end{verbatim}
+\caption{{ioctl(2) commands to handle control element set in userspace}}
+\label{ioctl-commands-userspace-element}
+\end{figure}
+
+
+
+
+
+
+\begin{verbatim}
+struct snd_ctl_elem_info {
+    struct snd_ctl_elem_id id;    /* W: element ID */
+    snd_ctl_elem_type_t type;    /* R: value type - SNDRV_CTL_ELEM_TYPE_* */
+    unsigned int access;        /* R: value access (bitmask) - SNDRV_CTL_ELEM_ACCESS_* */
+    unsigned int count;        /* count of values */
+    __kernel_pid_t owner;        /* owner's PID of this control */
+    union {
+        struct {
+            long min;        /* R: minimum value */
+            long max;        /* R: maximum value */
+            long step;        /* R: step (0 variable) */
+        } integer;
+        struct {
+            long long min;        /* R: minimum value */
+            long long max;        /* R: maximum value */
+            long long step;        /* R: step (0 variable) */
+        } integer64;
+        struct {
+            unsigned int items;    /* R: number of items */
+            unsigned int item;    /* W: item number */
+            char name[64];        /* R: value name */
+            __u64 names_ptr;    /* W: names list (ELEM_ADD only) */
+            unsigned int names_length;
+        } enumerated;
+        unsigned char reserved[128];
+    } value;
+    union {
+        unsigned short d[4];        /* dimensions */
+        unsigned short *d_ptr;        /* indirect - obsoleted */
+    } dimen;
+    unsigned char reserved[64-4*sizeof(unsigned short)];
+};
+\end{verbatim}
+
+\begin{verbatim}
+struct snd_ctl_elem_value {
+    struct snd_ctl_elem_id id;    /* W: element ID */
+    unsigned int indirect: 1;    /* obsoleted */
+    union {
+        union {
+            long value[128];
+            long *value_ptr;    /* obsoleted */
+        } integer;
+        union {
+            long long value[64];
+            long long *value_ptr;    /* obsoleted */
+        } integer64;
+        union {
+            unsigned int item[128];
+            unsigned int *item_ptr;    /* obsoleted */
+        } enumerated;
+        union {
+            unsigned char data[512];
+            unsigned char *data_ptr;    /* obsoleted */
+        } bytes;
+        struct snd_aes_iec958 iec958;
+    } value;        /* RO */
+    struct timespec tstamp;
+    unsigned char reserved[128-sizeof(struct timespec)];
+};
+\end{verbatim}
+
+\subsubsection{ALSA control component in user-land}
+
+\subsection{ALSA library}
+
+\subsubsection{Control API}
+
+\subsubsection{Configuration space and external control plugins}
+
+\subsubsection{Setup control API}
+
+\subsubsection{High level control API}
+
+\subsubsection{Mixer API}
+
+\subsubsection{Use Case Manager}
+
+\subsection{ALSA control daemon}
+
+\section{ALSA hardware dependent interface}
+
+\section{Linux Hot-plugging support}
+
+\subsection{udev}
+
+\subsection{inotify}
+
+\section{Requirements for control application}
+
+\newpage
+
+\begin{thebibliography}{99}
+
+\addcontentsline{toc}{section}{References}
+
+\bibitem{alsa-firewire-report}
+Enhancement of ALSA firewire stack (2015, Takashi Sakamoto) \\
+https://github.com/takaswie/alsa-firewire-report
+
+\bibitem{alsa-driver}
+Writing an ALSA Driver (2005, Takashi Iwai) \\
+http://www.alsa-project.org/main/index.php/ALSA\_Driver\_Documentation
+
+\bibitem{ieee1394-1}
+hoge
+
+\end{thebibliography}
+
+\newpage
+
+\appendix
+
+\addcontentsline{toc}{section}{Appendices}
+\addtocontents{toc}{\protect\setcounter{tocdepth}{-1}}
+
+\section{hoge}
+
+\section{fuga}
+
+\end{document}
