@@ -28,7 +28,11 @@ hoge
 
 \section{Introduction}
 
+
 \section{Firewire sound device model}
+
+In this section, I describe about a typical model of FireWire sound device, to consider about software stack for device control application.
+
 
 
 
@@ -65,115 +69,115 @@ hoge
 
 \section{ALSA Control Component and Interface}
 
-ALSA includes some components corresponds to each functionality of actual sound devices\footnote{alsa-firewire-report}. One of the components is responsible for control functionality. It's Control Component and Interface.
+ALSA includes some components corresponds to each functionality of actual sound devices\footnote{alsa-firewire-report}. One of the components is responsible for control functionality. In this document, it's referred to Control Component.
 
-In this section, I describe the Control Component and Control Interface.
+In this section, I describe the Control Component and its interface.
+
 
 \subsection{ALSA Control Component and Element set}
 
-In ALSA, each card instance has a role as a ALSA Control Component, thus it's no need for each driver to add some additional instances for Control Component itself.
+In ALSA, each card instance\footnote{struct snd\_card} has a role as a ALSA Control Component, thus each driver has no need to add specific instances for Control Component.
 
+Each controllable substance of actual card is represented as control elements\footnote{struct snd\_kcontrol}. Each driver adds some instances of control elements. Then, corresponding card instance manages the instances in a linked-list.
+
+The instance can includes several control elements with the same feature. In this document, to distinguish the instance from single control element, it's referred to control element set.
+
+
+\subsubsection{Control element identification}
+
+When added to card instance, each control element gain incremented identical number from the card. There're two ways to identify each control element in this control element set. One is just the numerical number, another is a combination of some parameters with control element name.
+
+The name of a control element set is used for included control elements, thus the control elements has the same name. To distinguish these control elements, numerical number is used. It's called as index.
+
+Each driver can allow to add control element set with the same name. In this case, these control element sets are added by indicating the value of index for the first control element in each control element set so as no overlap index for the control elements with the same name.
+
+To use the name and the offset for identification, the other parameters are also required. They're interface, device and subdevice. There're 6 types of the interface; card, hwdep, mixer, pcm, rawmidi, timer and sequencer. For usual control element set, the mixer interface is used. If the control element set is closely associated with certain ALSA components such as PCM, corresponding type of interface is used, then device and subdevice are also used to indicate the assosiated components\cite{alsa-driver}.
+
+The parameters for these two ways are transferred with the same structure, struct snd\_ctl\_elem\_id\footnote{include/uapi/sound/asound.h in Linux kernel source code}. See Figure \ref{fig:control-element-id}.
+Channel values for control element
 \begin{figure}[htbp]
 \small
 \begin{verbatim}
-struct snd_card {
-    ....
-    struct device ctl_dev;
-    unsigned int last_numid;
-    struct rw_semaphore controls_rwsem;
-    rwlock_t ctl_files_rwlock;
-    int controls_count;
-    int user_ctl_count;
-    struct list_head controls;
-    struct list_head ctl_files;
-    struct mutex user_ctl_lock;
-    ....
-};
-\end{verbatim}
-\caption{{Members related to control component in structure of card}}
-\label{alsa-card-structure}
-\end{figure}
+#define SNDRV_CTL_ELEM_ID_NAME_MAXLEN	44
 
-Each controllable substance of actual card is represented as control elements. To manage the control elements, \'struct snd\_kcontrol\' is defined. Typically, each driver implementation adds some instances of this structure. Then, corresponding card instance keeps the instances in a list named as \'controls\'.
-
-\begin{figure}[htbp]
-\small
-\begin{verbatim}
-struct snd_kcontrol {
-    struct list_head list;
-    struct snd_ctl_elem_id id;
-    unsigned int count;
-    snd_kcontrol_info_t *info;
-    snd_kcontrol_get_t *get;
-    snd_kcontrol_put_t *put;
-    union {
-        snd_kcontrol_tlv_rw_t *c;
-        const unsigned int *p;
-    } tlv;
-    unsigned long private_value;
-    void *private_data;
-    void (*private_free)(struct snd_kcontrol *kcontrol);
-    struct snd_kcontrol_volatile vd[0];    /* volatile data */
-};
-\end{verbatim}
-\caption{{Members related to control component in structure of card}}
-\label{alsa-card-structure}
-\end{figure}
-
-This structure includes an important member to consider about ALSA control design. Its \'count\'member.
-
-This member represents the number of elements in this instance. Therefore, this structure can represents a single control elements, while can also represents elements with the same feature. In this instance, each element can have its own state. This design is originally for control substances represented by a register in which a read or write operation handle. In this report, this structure or instance are referred as 'element set'.
-
-\subsubsection{Element identification}
-
-To indicate each element in this element set, \'id\' member is used. The \'structure snd\_ctl\_elem\_id\' includes enough information to identify each element.
-
-\begin{figure}[htbp]
-\small
-\begin{verbatim}
 struct snd_ctl_elem_id {
     unsigned int numid;
     snd_ctl_elem_iface_t iface;
     unsigned int device;
     unsigned int subdevice;
-    unsigned char name[44];
+    unsigned char name[SNDRV_CTL_ELEM_ID_NAME_MAXLEN];
     unsigned int index;
 };
 \end{verbatim}
-\caption{{Identical information of each control element}}
-\label{control-element-id}
+\caption{{Structure of identical information for control element}}
+\label{fig:control-element-id}
 \end{figure}
 
-There're two combinations of these members to identify an element. One is just numid, another is a combination of the rest.
 
-When added to a card instance, an element set gets unique numerical number, then included elements also gain numerical numbers incremented by its order inner the element set. Therefore, one element can be identified by one numerical number.
+\subsection{Control element access type}
 
-One element set must be named, then included elements also has the same name. Therefore, each element is not identified just by the name. This is a main reason that the structure includes \'index\' member. The value of this member is used for offset from the first element of the element set. 
+Control element has its own access type. The access type consists of some flags. See Figure \ref{fig:element-access-flags}. When added to card instance, each driver gives the flags with the other parameters. As of Linux kernel 4.1, there're some flags with no actual implementation.
+
+Usually, the controlable substance is readable and writable, thus both of read and write flags are used. If the substance is changable by the other than drivers, volatile flag is used. To transfer when changing state, timestamp flag is used. If control element allows to handle threshold level, tlv flags are used. When control element is added by userspace driver, user flag is used.
+
+The other fields are used to describe the state of control element.
 
 \begin{figure}[htbp]
 \small
 \begin{verbatim}
-typedef int __bitwise snd_ctl_elem_iface_t;
-#define SNDRV_CTL_ELEM_IFACE_CARD       ((__force snd_ctl_elem_iface_t) 0)
-#define SNDRV_CTL_ELEM_IFACE_HWDEP      ((__force snd_ctl_elem_iface_t) 1)
-#define SNDRV_CTL_ELEM_IFACE_MIXER      ((__force snd_ctl_elem_iface_t) 2)
-#define SNDRV_CTL_ELEM_IFACE_PCM        ((__force snd_ctl_elem_iface_t) 3)
-#define SNDRV_CTL_ELEM_IFACE_RAWMIDI    ((__force snd_ctl_elem_iface_t) 4)
-#define SNDRV_CTL_ELEM_IFACE_TIMER      ((__force snd_ctl_elem_iface_t) 5)
-#define SNDRV_CTL_ELEM_IFACE_SEQUENCER  ((__force snd_ctl_elem_iface_t) 6)
-#define SNDRV_CTL_ELEM_IFACE_LAST       SNDRV_CTL_ELEM_IFACE_SEQUENCER
+#define SNDRV_CTL_ELEM_ACCESS_READ          (1<<0)
+#define SNDRV_CTL_ELEM_ACCESS_WRITE         (1<<1)
+#define SNDRV_CTL_ELEM_ACCESS_READWRITE     (SNDRV_CTL_ELEM_ACCESS_READ |
+                                             SNDRV_CTL_ELEM_ACCESS_WRITE)
+#define SNDRV_CTL_ELEM_ACCESS_VOLATILE      (1<<2)
+#define SNDRV_CTL_ELEM_ACCESS_TIMESTAMP     (1<<3)
+#define SNDRV_CTL_ELEM_ACCESS_TLV_READ      (1<<4)
+#define SNDRV_CTL_ELEM_ACCESS_TLV_WRITE     (1<<5)
+#define SNDRV_CTL_ELEM_ACCESS_TLV_READWRITE (SNDRV_CTL_ELEM_ACCESS_TLV_READ |
+                                             SNDRV_CTL_ELEM_ACCESS_TLV_WRITE)
+#define SNDRV_CTL_ELEM_ACCESS_TLV_COMMAND   (1<<6)
+#define SNDRV_CTL_ELEM_ACCESS_INACTIVE      (1<<8)
+#define SNDRV_CTL_ELEM_ACCESS_LOCK          (1<<9)
+#define SNDRV_CTL_ELEM_ACCESS_OWNER         (1<<10)
+#define SNDRV_CTL_ELEM_ACCESS_TLV_CALLBACK  (1<<28)
+#define SNDRV_CTL_ELEM_ACCESS_USER          (1<<29)
 \end{verbatim}
-\caption{{All types of interface for control element}}
-\label{element-interface-type}
+\caption{{Element access flags}}
+\label{fig:element-access-flags}
 \end{figure}
 
-Furthermore, element set must have interface type for its purpose. 6 types of interfaces are defined. According to ALSA driver implementation guide\cite{alsa-driver}, SNDRV\_CTL\_ELEM\_IFACE\_MIXER is usually used. SNDRV\_CTL\_ELEM\_IFACE\_CARD is used for global controls which does not belong to mixer functionality. When the controls are closely associated with certain ALSA components, the other types of interfaces. In this case, \'device\' and \'subdevice\' fields should be used to indicate the associated components.
+As of Linux kernel 4.1, volatile and timestamp flag has no actual implementation. Furthermore, inactive flag is not used. The 30 and 31 value had already been obsoleted.
 
-Therefore, The combination of \'iface\', \'device\', \'subdevice\', \'name\', \'index\' can be used instead of \'numid\' to indicate an element.
+Each control element has set of these flags. In fact, the instance of control element set manages the status.
 
-\subsubsection{ALSA control element set information}
 
-Information of element set is defined
+\subsubsection{Control element set information}
+
+Control element set can have basic information. When adding new control element set, each driver gives the information.
+
+Each control element has several channels. Originally, the channels in a control element are used to represent controlable substance in the same register. Currently the channel is used regardless of the actual register.
+
+There're 7 types of control element; boolean, bytes, integer, integer64, iec958 and enumerated. See Figure \ref{fig:element-set-types}. The boolean, bytes, integer and integer64 control element has the corresponding type of value for its channels. The iec958 control element includes flags to describe parameters for IEC 60958. The enumerated control element has several labels to describes labeled values.
+
+\begin{figure}[htbp]
+\small
+\begin{verbatim}
+#define SNDRV_CTL_ELEM_TYPE_BOOLEAN     1
+#define SNDRV_CTL_ELEM_TYPE_INTEGER     2
+#define SNDRV_CTL_ELEM_TYPE_ENUMERATED  3
+#define SNDRV_CTL_ELEM_TYPE_BYTES       4
+#define SNDRV_CTL_ELEM_TYPE_IEC958      5
+#define SNDRV_CTL_ELEM_TYPE_INTEGER64   6
+\end{verbatim}
+\caption{{Types of control element set}}
+\label{fig:element-set-types}
+\end{figure}
+
+The integer and integer64 control element has a restriction of range for its value of each channel. Additionally, it has the value of step for its discrete values.
+
+In the enumerated control element, the length of each label is restricted by 63 characters (64 bytes with terminator) and the length of total labels is limited by 64 * 1024 bytes including their terminators.
+
+The information is represented by struct snd\_ctl\_elem\_info\footnote{include/uapi/sound/asound.h}. See Figure \ref{fig:element-set-info-structure}. This structure is used by each drivers to set information for control element.
 
 \begin{figure}[htbp]
 \small
@@ -206,33 +210,68 @@ struct snd_ctl_elem_info {
     } value;
     union {
         unsigned short d[4];
-        unsigned short *d_ptr;
     } dimen;
     unsigned char reserved[64-4*sizeof(unsigned short)];
 };
 \end{verbatim}
 \caption{{Structure for control element set information}}
-\label{element-set-info-structure}
+\label{fig:element-set-info-structure}
 \end{figure}
+
+\subsubsection{Channel values for control element}
+
+As described, control element can include several channels. The maximum number of channels included in an control element depends on the type of control element. See Table \ref{tbl:max-channels}
+
+\begin{table}[H]
+        \centering
+        \caption{{The maximum number of channels for each control element}}
+        \label{tbl:max-channels}
+        \begin{tabular}{ccc} \toprule
+		type & maximum \\ \midrule
+		boolean & 128 \\
+		byte & 512 \\
+		integer & 128 \\
+		integer64 & 64 \\
+		iec958 & 1 \\
+		enumerated & 128 \\ \bottomrule
+        \end{tabular}
+\end{table}
+
+The limitation is due to structure to represent these values. See Figure \ref{fig:element-channel-value}. Actually, the value of boolean, enumerated is the same as integer, thus they have the same maximum number, 128.
+
+This structure can deliver timestamp information when these values are read or changed, while there's no actual implementation.
 
 \begin{figure}[htbp]
 \small
 \begin{verbatim}
-typedef int __bitwise snd_ctl_elem_type_t;
-#define SNDRV_CTL_ELEM_TYPE_NONE    ((__force snd_ctl_elem_type_t) 0)
-#define SNDRV_CTL_ELEM_TYPE_BOOLEAN    ((__force snd_ctl_elem_type_t) 1)
-#define SNDRV_CTL_ELEM_TYPE_INTEGER    ((__force snd_ctl_elem_type_t) 2)
-#define SNDRV_CTL_ELEM_TYPE_ENUMERATED    ((__force snd_ctl_elem_type_t) 3)
-#define SNDRV_CTL_ELEM_TYPE_BYTES    ((__force snd_ctl_elem_type_t) 4)
-#define SNDRV_CTL_ELEM_TYPE_IEC958    ((__force snd_ctl_elem_type_t) 5)
-#define SNDRV_CTL_ELEM_TYPE_INTEGER64    ((__force snd_ctl_elem_type_t) 6)
-#define SNDRV_CTL_ELEM_TYPE_LAST    SNDRV_CTL_ELEM_TYPE_INTEGER64
+struct snd_ctl_elem_value {
+    struct snd_ctl_elem_id id;
+    union {
+        union {
+            long value[128];
+        } integer;
+        union {
+            long long value[64];
+        } integer64;
+        union {
+            unsigned int item[128];
+        } enumerated;
+        union {
+            unsigned char data[512];
+        } bytes;
+        struct snd_aes_iec958 iec958;
+    } value;
+    struct timespec tstamp;
+    unsigned char reserved[128-sizeof(struct timespec)];
+};
 \end{verbatim}
-\caption{{Types of control element set}}
-\label{element-set-types}
+\caption{{Channel value of a control element }}
+\label{fig:element-channel-value}
 \end{figure}
 
-\subsubsection{Channel values for ALSA control element}
+\subsubsection{Lock and own of control element}
+
+
 
 \subsubsection{ALSA control element set added by kernel-land driver}
 
@@ -394,6 +433,23 @@ struct snd_ctl_elem_value {
 \subsection{inotify}
 
 \section{Requirements for control application}
+
+\section{Weakpoints of each implementation}
+
+\subsection{FFADO D-Bus server}
+
+FFADO D-Bus server is a defective daemon. It cannot handle hot-plugging of any units on IEEE 1394 bus. This is due to restrictions of libffado.
+
+\subsection{ALSA Control Interface}
+
+ALSA Control Interface has a lack of functionality for matrix mixer.
+
+\subsection{ALSA library}
+
+
+
+\subsection{}
+\subsection{}
 
 \newpage
 
