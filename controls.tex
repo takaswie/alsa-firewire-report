@@ -50,6 +50,29 @@ In this section, I describe about a typical model of FireWire sound device, to c
 
 \subsection{TASCAM FireWire series}
 
+\section{Requirements for control application}
+
+\subsection{Handling bus reset}
+
+\subsection{Handling hot plugging}
+
+\section{FFADO defectives}
+
+FFADO is a project to develop user-land driver for FireWire sound devices\footnote{see my previous report.}. This project produces device control as well as streaming driver.
+
+The device control consists of two softwares; ffado-dbus-server and ffado-mixer. They communicate each other by D-Bus interface. The ffado-dbus-server uses libffado to communicate to the actual IEEE 1394 units, and it defines the D-Bus interface for applications. Thus, some applications can communicate to the ffado-dbus-serer. But as of Apr. 2015, there're no such applications except for ffado-mixer.
+
+The ffado-dbus-server has several defectives due to libffado. In this section, I describe about the defectives and the reason that ffado-dbus-server should not work as system daemon.
+
+\subsection{Unable to handle bus reset}
+
+The ffado-dbus-server has bugs for its handler of bus reset, therefore it cannot continue to communicate to IEEE 1394 units after bus reset. This is due to a wrong usage of libraw1394 handler.
+
+When bus reset occurs, the IEEE 1394 bus updates its unit topology, then change generation. The generation is 32bit value and incremented each bus reset. After bus reset, transmitters of IEEE 1394 transaction should use the same value as current generation. If using different generation, the transaction is dropped by IEEE 1394 link layer.
+
+\subsection{Unable to detect hot plugging}
+
+
 \section{FFADO control functionality}
 
 \subsection{libffado}
@@ -112,43 +135,6 @@ struct snd_ctl_elem_id {
 \caption{{Structure of identical information for control element}}
 \label{fig:control-element-id}
 \end{figure}
-
-
-\subsection{Control element access type}
-
-Control element has its own access type. The access type consists of some flags. See Figure \ref{fig:element-access-flags}. When added to card instance, each driver gives the flags with the other parameters. As of Linux kernel 4.1, there're some flags with no actual implementation.
-
-Usually, the controlable substance is readable and writable, thus both of read and write flags are used. If the substance is changable by the other than drivers, volatile flag is used. To transfer when changing state, timestamp flag is used. If control element allows to handle threshold level, tlv flags are used. When control element is added by userspace driver, user flag is used.
-
-The other fields are used to describe the state of control element.
-
-\begin{figure}[htbp]
-\small
-\begin{verbatim}
-#define SNDRV_CTL_ELEM_ACCESS_READ          (1<<0)
-#define SNDRV_CTL_ELEM_ACCESS_WRITE         (1<<1)
-#define SNDRV_CTL_ELEM_ACCESS_READWRITE     (SNDRV_CTL_ELEM_ACCESS_READ |
-                                             SNDRV_CTL_ELEM_ACCESS_WRITE)
-#define SNDRV_CTL_ELEM_ACCESS_VOLATILE      (1<<2)
-#define SNDRV_CTL_ELEM_ACCESS_TIMESTAMP     (1<<3)
-#define SNDRV_CTL_ELEM_ACCESS_TLV_READ      (1<<4)
-#define SNDRV_CTL_ELEM_ACCESS_TLV_WRITE     (1<<5)
-#define SNDRV_CTL_ELEM_ACCESS_TLV_READWRITE (SNDRV_CTL_ELEM_ACCESS_TLV_READ |
-                                             SNDRV_CTL_ELEM_ACCESS_TLV_WRITE)
-#define SNDRV_CTL_ELEM_ACCESS_TLV_COMMAND   (1<<6)
-#define SNDRV_CTL_ELEM_ACCESS_INACTIVE      (1<<8)
-#define SNDRV_CTL_ELEM_ACCESS_LOCK          (1<<9)
-#define SNDRV_CTL_ELEM_ACCESS_OWNER         (1<<10)
-#define SNDRV_CTL_ELEM_ACCESS_TLV_CALLBACK  (1<<28)
-#define SNDRV_CTL_ELEM_ACCESS_USER          (1<<29)
-\end{verbatim}
-\caption{{Element access flags}}
-\label{fig:element-access-flags}
-\end{figure}
-
-As of Linux kernel 4.1, volatile and timestamp flag has no actual implementation. Furthermore, inactive flag is not used. The 30 and 31 value had already been obsoleted.
-
-Each control element has set of these flags. In fact, the instance of control element set manages the status.
 
 
 \subsubsection{Control element set information}
@@ -218,6 +204,7 @@ struct snd_ctl_elem_info {
 \label{fig:element-set-info-structure}
 \end{figure}
 
+
 \subsubsection{Channel values for control element}
 
 As described, control element can include several channels. The maximum number of channels included in an control element depends on the type of control element. See Table \ref{tbl:max-channels}
@@ -269,13 +256,111 @@ struct snd_ctl_elem_value {
 \label{fig:element-channel-value}
 \end{figure}
 
-\subsubsection{Lock and own of control element}
+
+\subsubsection{Control element access type}
+
+Control element has its own access type. The access type consists of some flags. See Figure \ref{fig:element-access-flags}. When adding a new control element set to card instance, each driver gives the flags as well as the other parameters. All control elements in a control element set basically have the same flags.
+
+Usually, the controlable substance is readable and writable, thus both of read and write flags are used. If control element allows to handle threshold level, some tlv flags are used. When a control element set is added by userspace driver, user flag is used.
+
+The timestamp flag means the read data includes timestamp at which channels of the control element are changed. The volatile flag means the channel of control element can be asynchronously changed.
+
+\begin{figure}[htbp]
+\small
+\begin{verbatim}
+#define SNDRV_CTL_ELEM_ACCESS_READ          (1<<0)
+#define SNDRV_CTL_ELEM_ACCESS_WRITE         (1<<1)
+#define SNDRV_CTL_ELEM_ACCESS_READWRITE     (SNDRV_CTL_ELEM_ACCESS_READ |
+                                             SNDRV_CTL_ELEM_ACCESS_WRITE)
+#define SNDRV_CTL_ELEM_ACCESS_VOLATILE      (1<<2)
+#define SNDRV_CTL_ELEM_ACCESS_TIMESTAMP     (1<<3)
+#define SNDRV_CTL_ELEM_ACCESS_TLV_READ      (1<<4)
+#define SNDRV_CTL_ELEM_ACCESS_TLV_WRITE     (1<<5)
+#define SNDRV_CTL_ELEM_ACCESS_TLV_READWRITE (SNDRV_CTL_ELEM_ACCESS_TLV_READ |
+                                             SNDRV_CTL_ELEM_ACCESS_TLV_WRITE)
+#define SNDRV_CTL_ELEM_ACCESS_TLV_COMMAND   (1<<6)
+#define SNDRV_CTL_ELEM_ACCESS_INACTIVE      (1<<8)
+#define SNDRV_CTL_ELEM_ACCESS_LOCK          (1<<9)
+#define SNDRV_CTL_ELEM_ACCESS_OWNER         (1<<10)
+#define SNDRV_CTL_ELEM_ACCESS_TLV_CALLBACK  (1<<28)
+#define SNDRV_CTL_ELEM_ACCESS_USER          (1<<29)
+\end{verbatim}
+\caption{{Element access flags}}
+\label{fig:element-access-flags}
+\end{figure}
+
+These flags tell implementation requirements to userspace applications. For example, when an control element has read flag, userspace applications can execute read operation to the control element. Of cource, each driver should have corresponding implementation.
+
+Basically, some flags in a control element is mutable, while the inactive, lock and owner flags are immutable to describe current status of the control element. The inactive flag means the control element exists but is not activated. The combination of lock and owner flags means the locking state of control element.
 
 
+\subsubsection{Locking state of control element}
 
-\subsubsection{ALSA control element set added by kernel-land driver}
+An userspace application can lock arbitrary control elements. The process to lock the control element is called as 'owner'. When locked, the other processes can read channels of the control element, while cannot write to channels of the control element.
 
-When adding new element sets, ALSA kernel-land drivers call snd\_ctl\_new1() with a template. The template is represented by \'struct snd\_kcontrol\_new\'.
+In locking state, when reading information of the control element, it has lock flag. When the owner process read the information, the control element has lock and owner flag.
+
+For both owner process and non-owner process, the information includes owner's PID. In unlocking state, a control element gives -1 for the PID field in information data.
+
+
+\subsubsection{Threshold level representation and operation for sound pressure}
+
+Generally, in human perception, the maximum and minimum signal level which human can perceive as sound are limited. The perceptived sound is calles as loudness and its level is not linearly increased even if the signal level is linearly increased. Additionally, the loudness level differs depending on signal frequency. There's a series of study about this\footnote{i.e. ISO 226:2003}.
+
+In acoustics engineering, common logarithm\footnote{Logarithm based on 10.} is used for a formula between signal level and loudness level. This way is too primitive and rough, but a simple, easy and practical. In this way, the loudness level is referred to 'sound pressure level', calculated by equation \ref{eq:decibel}.
+
+\begin{equation}
+L_p = 10 \log_{10} \frac{p}{p_0} \label{eq:decibel}
+\end{equation}
+
+Here, $L_p$ is sound pressure level (decibell, dB), p is measured sound pressure(Pa), $p_0$ is minimum sound pressure level and defined with $2 \times 10^-5$ (Pa).
+
+In most sound devices, corresponding sound drivers control the sound pressure by reading/writing their registers. The driver developers cannot know actual sound pressure, but can know maximum and minimum value on the registers. If incrementing the value of registers can linearly increase the sound pressure, there're some demands for application developer to calculate read/write value according to sound pressure level. Then, some tlv parameters should be given, such as the required value change to change pressure level by a unit of 0.1 dB.
+
+ALSA Control Component refers the threshold level as 'tlv' and gives a way to transfer tlv parameters.
+
+Originally, ALSA Control Component allows each driver to have pre-defined tlv information. This implements one tlv information to each driver instance and allows applications to read the information.
+
+The tlv information is represented by an array consists of unsigned int elements and  has hierarchic structure. The data is capculated by container. Each container has a type in its first element, and the number of included data in its second element. There's just one type of container, SNDRV\_CTL\_TLVT\_DB\_SCALE.
+
+<TODO: graphic>
+
+In 2006, tlv operations are expanded\footnote{commit 8aa9b586e42099817163aba01d925c2660c4dbbe in Linux kernel source code}. Write and command operations were added. Later, new types of container were added.
+
+According to these implementation, each driver can have flexible information for tlv. On the other hand, as if Linux 4.1, no kernel-land drivers supports the command operation.
+
+
+\subsubsection{Control event notification}
+
+ALSA Control Component supports event notification. As of Linux 4.1, events for control elements are supported. The supported events are removing, changing information, changing the value of channels and handling tlv information.
+
+\begin{figure}[htbp]
+\small
+\begin{verbatim}
+enum sndrv_ctl_event_type {
+    SNDRV_CTL_EVENT_ELEM = 0,
+    SNDRV_CTL_EVENT_LAST = SNDRV_CTL_EVENT_ELEM,
+};
+
+#define SNDRV_CTL_EVENT_MASK_VALUE  (1<<0)
+#define SNDRV_CTL_EVENT_MASK_INFO   (1<<1)
+#define SNDRV_CTL_EVENT_MASK_ADD    (1<<2)
+#define SNDRV_CTL_EVENT_MASK_TLV    (1<<3)
+#define SNDRV_CTL_EVENT_MASK_REMOVE (~0U)
+\end{verbatim}
+\caption{{Defined events}}
+\label{defined-events}
+\end{figure}
+
+The events for control elements are transferred with identical information and event mask.
+
+\subsection{Driver implementation}
+
+ALSA Control Component has both of kernel API and userspace API, thus drivers can be implemented in both sides.
+
+\subsubsection{Kernel-land driver}
+
+When adding a new control element set, ALSA kernel-land drivers call snd\_ctl\_new1() with a template. The template is represented by \'struct snd\_kcontrol\_new\'.
 
 \begin{figure}[htbp]
 \small
@@ -302,7 +387,7 @@ struct snd_kcontrol_new {
 \label{control-element-template}
 \end{figure}
 
-This structure includes enough members to build an instance of ALSA control element set. Some operations of the element set is implemented as four callback functions. According to ALSA driver implementation guide\cite{alsa-driver}, the purposes of these callback functions are:
+This structure includes enough members to build an instance of ALSA control element set. Four operations are defined as a callback functions.
 
 \begin{description}
 \small
@@ -316,16 +401,18 @@ For write operation of the element set
 For threshold level operation of the element set
 \end{description}
 
-In info callback function, each driver should fill enough members of \'struct snd\_ctl\_elem\_info\'. This structure includes union field to describe parameters for each types of element set.
+In info callback function, each driver should fill enough members of passed 'struct snd\_ctl\_elem\_info'.
 
-\subsection{Threshold level representation}
+In read/write callback function, each driver can control actual devices.
 
-To describe information about threshold level, 
+In tlv callback function, each driver can modify its own tlv information or keep/handle given tlv information.
+
+The added control element sets are removed when the device is removed or the driver is unloaded.
 
 
-\subsubsection{ALSA control element set added by user-land driver}
+\subsubsection{User-land driver}
 
-ALSA control interface allows userspace applications to add/replace/remove control element sets into registered card instances. The operation is implemented in ioctl(2) commands.
+ALSA control interface allows userspace applications to add/replace/remove control element sets into registered card instances. The operation is implemented in ioctl(2) commands. In this document, the userspace is called as an user-land driver.
 
 \begin{figure}[htbp]
 \small
@@ -338,87 +425,252 @@ ALSA control interface allows userspace applications to add/replace/remove contr
 \label{ioctl-commands-userspace-element}
 \end{figure}
 
+When adding a new control element set, userspace driver gives information data with identical information and basic parameters. In this case, the owner field is used for a different purpose. The given value to owner field is used for the number of control elements in the control element set. On the other hand, the count field is used for the number of channels which an control element has.
+
+If registering tlv information, tlv write flag should be given to the information. Then, write operation can be available. In this case, the control elements automatically has tlv callback flag for an internal reason of ALSA Control Component. Actually, to allow the other applications to read tlv information, the control element set should have tlv read flag.
+
+The userspace driver should listen to control notification to catch value change of each channel in control element.
+
+The remove ioctl is used to remove an control element set identified by the given information. I note that these added control element set can be also removed by the other applications. Additionally, when no applications remove these control element set, they exist till the character device exists.
 
 
+\subsection{ALSA Control Interface for control elements}
 
+ALSA Control interface is designed to basic operations such as open(2)/ioctl(2)/close(2). Their entry point is ALSA Control character device.
 
+When opening one of the chracter devices and get a file descriptor, userspace applications can handle control elements via the file descriptor. These operations are defined to ioctl(2) commands.
 
+\begin{figure}[htbp]
+\small
 \begin{verbatim}
-struct snd_ctl_elem_info {
-    struct snd_ctl_elem_id id;    /* W: element ID */
-    snd_ctl_elem_type_t type;    /* R: value type - SNDRV_CTL_ELEM_TYPE_* */
-    unsigned int access;        /* R: value access (bitmask) - SNDRV_CTL_ELEM_ACCESS_* */
-    unsigned int count;        /* count of values */
-    __kernel_pid_t owner;        /* owner's PID of this control */
-    union {
-        struct {
-            long min;        /* R: minimum value */
-            long max;        /* R: maximum value */
-            long step;        /* R: step (0 variable) */
-        } integer;
-        struct {
-            long long min;        /* R: minimum value */
-            long long max;        /* R: maximum value */
-            long long step;        /* R: step (0 variable) */
-        } integer64;
-        struct {
-            unsigned int items;    /* R: number of items */
-            unsigned int item;    /* W: item number */
-            char name[64];        /* R: value name */
-            __u64 names_ptr;    /* W: names list (ELEM_ADD only) */
-            unsigned int names_length;
-        } enumerated;
-        unsigned char reserved[128];
-    } value;
-    union {
-        unsigned short d[4];        /* dimensions */
-        unsigned short *d_ptr;        /* indirect - obsoleted */
-    } dimen;
-    unsigned char reserved[64-4*sizeof(unsigned short)];
+#define SNDRV_CTL_IOCTL_ELEM_LIST _IOWR('U', 0x10, struct snd_ctl_elem_list)
+#define SNDRV_CTL_IOCTL_ELEM_INFO _IOWR('U', 0x11, struct snd_ctl_elem_info)
+#define SNDRV_CTL_IOCTL_ELEM_READ _IOWR('U', 0x12, struct snd_ctl_elem_value)
+#define SNDRV_CTL_IOCTL_ELEM_WRITE _IOWR('U', 0x13, struct snd_ctl_elem_value)
+#define SNDRV_CTL_IOCTL_ELEM_LOCK _IOW('U', 0x14, struct snd_ctl_elem_id)
+#define SNDRV_CTL_IOCTL_ELEM_UNLOCK _IOW('U', 0x15, struct snd_ctl_elem_id)
+#define SNDRV_CTL_IOCTL_SUBSCRIBE_EVENTS _IOWR('U', 0x16, int)
+#define SNDRV_CTL_IOCTL_TLV_READ _IOWR('U', 0x1a, struct snd_ctl_tlv)
+#define SNDRV_CTL_IOCTL_TLV_WRITE _IOWR('U', 0x1b, struct snd_ctl_tlv)
+#define SNDRV_CTL_IOCTL_TLV_COMMAND _IOWR('U', 0x1c, struct snd_ctl_tlv)
+\end{verbatim}
+\caption{{ioctl(2) commands to handle control element}}
+\label{ioctl-handle-element}
+\end{figure}
+
+Userspace applications can get the list of identical informations of existed control element.
+
+\begin{figure}[htbp]
+\small
+\begin{verbatim}
+struct snd_ctl_elem_list {
+	unsigned int offset;
+	unsigned int space;
+	unsigned int used;
+	unsigned int count;
+	struct snd_ctl_elem_id __user *pids;
+	unsigned char reserved[50];
 };
 \end{verbatim}
+\caption{{Structure for control element list}}
+\label{snd-ctl-elem-list}
+\end{figure}
 
+There're two ways to use this operation. The first way is to get the number of control element. When the space field is zero, the count field is filled with the number of control element.
+
+Another way is to get the list of indentical informations for existed control element. In this case, the pids field has a pointer for pre-allocated memory to identical information list, and the space field is filled with the number of allocated memory at unit of identical information structure.
+
+To avoid allocating excess memory object in kernel space, the maximum number of space is limited within 16384. If there're more control element, the offset fields can be available to indicate an offset from the first control element with minimum numerical number.
+
+The lock operation is used to own a control element. The unlock operation is used to release the control element. If the control element is owned by the other userspace applications, the unlock operation fails.
+
+If userspace applications want to receive control element notification, the application should call the subscribe events operation in advance. Then, these notification can be readable from a file descriptor.
+
+\begin{figure}[htbp]
+\small
 \begin{verbatim}
-struct snd_ctl_elem_value {
-    struct snd_ctl_elem_id id;    /* W: element ID */
-    unsigned int indirect: 1;    /* obsoleted */
+struct snd_ctl_event {
+    int type;
     union {
-        union {
-            long value[128];
-            long *value_ptr;    /* obsoleted */
-        } integer;
-        union {
-            long long value[64];
-            long long *value_ptr;    /* obsoleted */
-        } integer64;
-        union {
-            unsigned int item[128];
-            unsigned int *item_ptr;    /* obsoleted */
-        } enumerated;
-        union {
-            unsigned char data[512];
-            unsigned char *data_ptr;    /* obsoleted */
-        } bytes;
-        struct snd_aes_iec958 iec958;
-    } value;        /* RO */
-    struct timespec tstamp;
-    unsigned char reserved[128-sizeof(struct timespec)];
+        struct {
+            unsigned int mask;
+            struct snd_ctl_elem_id id;
+        } elem;
+        unsigned char data8[60];
+    } data;
 };
 \end{verbatim}
+\caption{{Structure for control notification event}}
+\label{snd-ctl-event}
+\end{figure}
 
-\subsubsection{ALSA control component in user-land}
+When the control element has corresponding flags, tlv read/write/command operations are available.
+
 
 \subsection{ALSA library}
 
+ALSA project develops an userspace library to give higher abstructions for each interfaces such as PCM or Sequencer. In this section, I describe about basic design of ALSA library and control API.
+
+
+\subsubsection{Configuration space and plugins}
+
+ALSA interface consists of PCM, Compress\footnote{Currently ALSA library doesn't support this interface.}, Control, RawMidi, Sequencer, Timer and Hardware Dependent (HwDep). They have its own character devices. The main purpose of ALSA library is to capsulate raw access to character deivces and to add software functional implementation to the access. This is called as configuration space.
+
+The configuration space is based on ALSA configuration files\footnote{/usr/share/alsa/alsa.conf.d/*, /etc/asound.conf and ~/.asoundrc}. These configuration files describe node settings for each interfaces.
+
+When userspace applications open handles for ALSA interfaces, ALSA library parses these configuration files to construct configuration space. Userspace applications can open handlers against the nodes.
+
+Each node setting can have plugin entry. The plugin is to extend node functionality with software implementation. For ALSA Control Interface, hw and shm plugin are included in ALSA library.
+
+The hw plugin execute raw access to ALSA Control character device. The shm plugin is designed for interprocess communication.
+
+
+\subsubsection{External control plugins}
+
+ALSA library allows to develop plugins externally. This is called as external control plugin. As of alsa-plugins 1.0.29, arcam, maemo, oss and pulse plugins are included.
+
+The external control plugin can be available by the same way as control plugins in ALSA library.
+
+
 \subsubsection{Control API}
 
-\subsubsection{Configuration space and external control plugins}
+Control API is designed to use a handler, snd\_ctl\_t for operation. The handler is an opaque pointer for struct \_snd\_ctl\footnote{src/control/control\_local.h} and userspace applications cannot refer to each member of the structure.
+
+\begin{figure}[htbp]
+\small
+\begin{verbatim}
+struct _snd_ctl {
+    void *open_func;
+    char *name;
+    snd_ctl_type_t type;
+    const snd_ctl_ops_t *ops;
+    void *private_data;
+    int nonblock;
+    int poll_fd;
+    struct list_head async_handlers;
+};
+\end{verbatim}
+\caption{{Control handler internals}}
+\label{control-handler-internals}
+\end{figure}
+
+The type member means the type of plugin to which the handler is assigend. As of ALSA library 1.0.29, four types are defined, while INET type has no actual plugin implementation.
+
+\begin{figure}[htbp]
+\small
+\begin{verbatim}
+typedef enum _snd_ctl_type {
+    SND_CTL_TYPE_HW,
+    SND_CTL_TYPE_SHM,
+    SND_CTL_TYPE_INET,
+    SND_CTL_TYPE_EXT
+} snd_ctl_type_t;
+\end{verbatim}
+\caption{{Types of handlers}}
+\label{snd-ctl-type-t}
+\end{figure}
+
+When opening the handler, userspace applications call snd\_ctl\_open() with the name of node and a mode flag. As of ALSA library 1.0.29, there're three types of handler mode flags. As of ALSA library 1.0.29 and Linux kernel 4.1, there're no implementation for write operation, therefore readonly flag is meaningless.
+
+\begin{figure}[htbp]
+\small
+\begin{verbatim}
+#define SND_CTL_NONBLOCK		0x0001
+#define SND_CTL_ASYNC			0x0002
+#define SND_CTL_READONLY		0x0004
+\end{verbatim}
+\caption{{Handler flags}}
+\label{handler-flags}
+\end{figure}
+
+\begin{figure}[htbp]
+\small
+\begin{verbatim}
+typedef struct _snd_ctl snd_ctl_t;
+int snd_ctl_open(snd_ctl_t **ctl, const char *name, int mode);
+int snd_ctl_open_lconf(snd_ctl_t **ctl, const char *name, int mode,
+                       snd_config_t *lconf);
+int snd_ctl_open_fallback(snd_ctl_t **ctl, snd_config_t *root, const char *name,
+                          const char *orig_name, int mode);
+int snd_ctl_close(snd_ctl_t *ctl);
+\end{verbatim}
+\caption{{Handler operations}}
+\label{handler-operations}
+\end{figure}
+
+Control API is designed to use opaque pointers for fundamental structures. Thus, userspace applications cannot directrly refer to each members in the structure.
+
+\begin{figure}[htbp]
+\small
+\begin{verbatim}
+typedef struct _snd_ctl_elem_id snd_ctl_elem_id_t;
+typedef struct _snd_ctl_elem_list snd_ctl_elem_list_t;
+typedef struct _snd_ctl_elem_info snd_ctl_elem_info_t;
+typedef struct _snd_ctl_elem_value snd_ctl_elem_value_t;
+typedef struct _snd_ctl_event snd_ctl_event_t;
+\end{verbatim}
+\caption{{Opaque pointers for fundamental structures}}
+\label{opaque-pointers}
+\end{figure}
+
+
+
+\begin{figure}[htbp]
+\small
+\begin{verbatim}
+int snd_ctl_poll_descriptors_count(snd_ctl_t *ctl);
+int snd_ctl_poll_descriptors(snd_ctl_t *ctl, struct pollfd *pfds,
+                             unsigned int space);
+int snd_ctl_poll_descriptors_revents(snd_ctl_t *ctl, struct pollfd *pfds,
+                                unsigned int nfds, unsigned short *revents);
+int snd_ctl_subscribe_events(snd_ctl_t *ctl, int subscribe);
+\end{verbatim}
+\caption{{Read-related operations}}
+\label{read-related-operations}
+\end{figure}
+
+
+\begin{figure}[htbp]
+\small
+\begin{verbatim}
+int snd_ctl_elem_list(snd_ctl_t *ctl, snd_ctl_elem_list_t *list);
+int snd_ctl_elem_info(snd_ctl_t *ctl, snd_ctl_elem_info_t *info);
+int snd_ctl_elem_read(snd_ctl_t *ctl, snd_ctl_elem_value_t *value);
+int snd_ctl_elem_write(snd_ctl_t *ctl, snd_ctl_elem_value_t *value);
+int snd_ctl_elem_lock(snd_ctl_t *ctl, snd_ctl_elem_id_t *id);
+int snd_ctl_elem_unlock(snd_ctl_t *ctl, snd_ctl_elem_id_t *id);
+int snd_ctl_elem_tlv_read(snd_ctl_t *ctl, const snd_ctl_elem_id_t *id,
+                          unsigned int *tlv, unsigned int tlv_size);
+int snd_ctl_elem_tlv_write(snd_ctl_t *ctl, const snd_ctl_elem_id_t *id,
+                           const unsigned int *tlv);
+int snd_ctl_elem_tlv_command(snd_ctl_t *ctl, const snd_ctl_elem_id_t *id,
+                             const unsigned int *tlv);
+\end{verbatim}
+\caption{{Element operations}}
+\label{element-operations}
+\end{figure}
+
+
+\begin{figure}[htbp]
+\small
+\begin{verbatim}
+int snd_ctl_nonblock(snd_ctl_t *ctl, int nonblock);
+int snd_ctl_abort(snd_ctl_t *ctl);
+int snd_async_add_ctl_handler(snd_async_handler_t **handler, snd_ctl_t *ctl, 
+			snd_async_callback_t callback, void *private_data);
+snd_ctl_t *snd_async_handler_get_ctl(snd_async_handler_t *handler);
+\end{verbatim}
+\caption{{Asynchronous operations}}
+\label{async-operations}
+\end{figure}
 
 \subsubsection{Setup control API}
 
 \subsubsection{High level control API}
 
 \subsubsection{Mixer API}
+
+
 
 \subsubsection{Use Case Manager}
 
