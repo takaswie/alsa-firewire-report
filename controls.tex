@@ -52,9 +52,6 @@ In this section, I describe about a typical model of FireWire sound device, to c
 
 \section{Requirements for control application}
 
-\subsection{Handling bus reset}
-
-\subsection{Handling hot plugging}
 
 \section{FFADO defectives}
 
@@ -68,26 +65,27 @@ The ffado-dbus-server has several defectives due to libffado. In this section, I
 
 The ffado-dbus-server has bugs for its handler of bus reset, therefore it cannot continue to communicate to IEEE 1394 units after bus reset. This is due to a wrong usage of libraw1394 handler.
 
-When bus reset occurs, the IEEE 1394 bus updates its unit topology, then change generation. The generation is 32bit value and incremented each bus reset. After bus reset, transmitters of IEEE 1394 transaction should use the same value as current generation. If using different generation, the transaction is dropped by IEEE 1394 link layer.
+When bus reset occurs, the IEEE 1394 bus updates its node topology, and changes generation. The generation is 32bit value and incremented each bus reset. After bus reset, transmitters of IEEE 1394 transaction should use the same value as current generation. If using different generation, the transaction is dropped by IEEE 1394 link layer.
+
+In Linux FireWire subsystem, userspace applications should set the generation to a transaction parameter.
+
+The libffado uses libraw1394 as its I/O backend. The basic operation of libraw1394 is based on a handler. The handler has a member for the generation and the userspace application has a responsibility to update the member in a handler.
+
+The applications can achieve this by raw1394\_new\_handle\_on\_port() or raw1394\_set\_port() in bus reset handler. The libffado is not programmed to do it.
+
 
 \subsection{Unable to detect hot plugging}
 
+One of the causes of bus reset is adding/removing nodes to/from the IEEE 1394 bus. Therefore, IEEE 1394 unit discovery is required. As a result, some devices are newly available, or unavailable.
 
-\section{FFADO control functionality}
+Since the libffado has bugs for its handler of bus reset, it cannot detect new devices or lost devices.
 
-\subsection{libffado}
+In usual usage, at first, applications construct an instance of FFADO::DeviceManager, then call initialize() method. This method seeks FireWire character devices which refers to 'port' in the libraw1394, then constructs an instance of FFADO::Ieee1394Service for each port. When initialized, the instance of FFADO::Ieee1394Service registers its bus reset handler to libraw1394. Finally, the instance of FFADO::DeviceManager registers its bus reset handler to the instance of Ieee1394Service. Next, applications call FFADO::DeviceManager::discover() to keep device instances into local list.
 
-\subsection{FFADO D-bus interface}
+Both of bus reset handler in FFADO::DeviceManager and FFADO::Ieee1394Service don't update the local list, therefore device instances in the list is not eliminated. Furthermore, new instances of FFADO::Ieee1394Service corresponding to new libraw1394 ports are not created, thus the list cannot gain new device instances. Existed device instances in the list is going to be updated, but this operation fails because of the generation mismatch as described.
 
-\subsection{FFADO D-bus server}
 
-\subsection{FFADO Mixer}
-
-\section{}
-
-\section{Linux firewire subsystem}
-
-\subsection{fw character devices}
+In this section, I describe some defectives of FFADO as service server daemon. This daemon program should be used as temporary service and unavailable for system daemon.
 
 
 \section{ALSA Control Component and Interface}
