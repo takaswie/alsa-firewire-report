@@ -29,28 +29,110 @@ hoge
 \section{Introduction}
 
 
-\section{Firewire sound device model}
+\section{Features of FireWire sound devices}
 
 In this section, I describe about a typical model of FireWire sound device, to consider about software stack for device control application.
 
+\section{Requirements to control FireWire sound devices}
+
+Devices connected to IEEE 1394 bus have much model-specific functionalities, thus the requirements are different between actual supported models. For reasonable discussion, I start to describe control application generals, then specialize the discussion to FireWire sound devices in a step by step.
+
+\subsection{Requirements for control application generals}
+
+Most of FireWire sound devices are designed to production use, while they're surely a kind of sound devices. In this subsection, I describe about requirements for control application generals.
+
+\subsubsection{Enabled to access to devices}
+
+These applications need to access to actual devices. These devices are on any peripheral buses such as PCI/PCI-Express bus, USB, IEEE 1394 bus and buses designed to this purpose and addressed by bus-specific way.
+
+In a view of userspace applications, the ways to access to these buses are a kind of system resources. The application process should execute system call to change CPU mode in its execution path. Kernel should have corresponding drivers and functionalities.
+
+
+\subsubsection{Have functionality to get available controls}
+
+Usually, one control application supports several devices with the same chipset, while these devices have different control compositions due to vendor's customization. Control applications should have functionality to get available controls on the device.
+
+For some devices, the available controls are hard-coded in control applications. On the other hand, some devices gives a way for control applications to get composition of available controls on the devices. In this case, the control application should have parsers for the information.
+
+
+\subsubsection{Command-line user interface support to set parameters by scripts}
+
+Control applications are for users, therefore it should have user interfaces. Command-line interface is required to set the configuration. In most case, an user has his or her preferred configuration of parameters to owned device. In this case, shell scripting satisfies the users.
+
+
+\subsection{Model-specific requirements}
+
+Many sound devices have been produced and they may have model-specific requirements. In this subsection, I describe about model-specific requirements.
+
+
+\subsubsection{Automatical launching support at detection}
+
+Some devices require initial setup by software, or require firmware downloading from software. In most case, device drivers perform this, while control applications can also perform this. For this type of devices, control applications should automatically launch when the device is detected.
+
+The control application sets previous state of parameters to utilize this functionality for better usage,
+
+
+\subsubsection{Non-volatile memory for write-only parameters}
+
+Some devices give no ways for control applications to get devices' current parameters. Control applications should remember state of the devices, thus non-volatile memory is required in application side.
+
+Even if the application have non-volatile memory, it cannot get to know initial state of the device. In this case, application developers need to know the state in device's specification.
+
+
+\subsubsection{Event polling support for asynchronous messages}
+
+Some devices transmit asynchronous messages and control applications should handle the messages depending on the aim. In this case, the control application should listen to the message in event loop, and notifies to users or processes something at receiving.
+
+
+\subsubsection{Periodical access support for software controled registers}
+
+Some devices have physical controls on their chassis. Most of them directly contol parameters of the device, while some devices depends actual controls to control applications. In this case, the control application periodically accesses to the device to get the state of physical controls, then perform actual changes to corresponding controls. This requirements seems to share the state of parameters.
+
+
+\subsubsection{Graphical user interface support to set parameters for much controls}
+
+Some devices have much controls or complicated controls. Command-line interface is sometimes difficult to give enough overview to users. In this case, graphical user interface is better for presentation.
+
+
+\section{Requirements to control units on IEEE 1394 bus}
 
 
 
-\section{Implementations of each chipset}
+\subsection{IEEE 1394 transaction support to read/write registers}
 
-\subsection{BeBoB}
 
-\subsection{Fireworks}
+\subsection{Generation update support to handle bus reset}
 
-\subsection{OXFW}
 
-\subsection{Dice}
+\section{Investigation for potential frameworks}
 
-\subsection{Digidesign 002/003 family}
+\subsection{Linux FireWire subsystem interface}
 
-\subsection{TASCAM FireWire series}
 
-\section{Requirements for control application}
+
+\subsection{Libraw1394}
+
+The libraw1394\footnote{http://git.kernel.org/cgit/libs/ieee1394/libraw1394.git} is a userspace I/O library for units on IEEE 1394 bus. This library is developed by Linux FireWire subsystem community\footnote{https://ieee1394.wiki.kernel.org/}. The design of this library is based on a handler structure, raw1394handle\_t. This handle works as a wrapper for both of old kernel ieee1394 interfaces and new kernel fw interfaces.
+
+
+
+
+\subsection{ALSA Hardware Dependent interface}
+\subsection{ALSA Control interface}
+\subsection{FFADO D-Bus API}
+\subsection{ALSA Control API}
+\subsection{ALSA HControl, SControl and Mixer APIs}
+
+
+\section{Case study to clear framework defectives}
+
+\subsection{Intel HDA Controller/Codec}
+
+ALSA Control interface
+
+\subsection{FFADO D-Bus server}
+
+hot-plugging and bus reset even if it's service daemon
 
 
 \section{FFADO defectives}
