@@ -33,3 +33,8 @@ controls: image
 	platex controls.tex
 	platex controls.tex
 	dvipdfmx controls
+
+alsa-control: image
+	platex alsa-control.tex
+	platex alsa-control.tex
+	dvipdfmx alsa-control

@@ -62,7 +62,7 @@ Control applications are for users, therefore it should have user interfaces. Co
 
 \subsection{Model-specific requirements}
 
-Many sound devices have been produced and they may have model-specific requirements. In this subsection, I describe about model-specific requirements.
+Many sound devices have been produced and they may have model-specific features. In this subsection, I describe about them as optional requirements
 
 
 \subsubsection{Automatical launching support at detection}
@@ -72,7 +72,7 @@ Some devices require initial setup by software, or require firmware downloading 
 The control application sets previous state of parameters to utilize this functionality for better usage,
 
 
-\subsubsection{Non-volatile memory for write-only parameters}
+\subsubsection{Non-volatile memory support for write-only parameters}
 
 Some devices give no ways for control applications to get devices' current parameters. Control applications should remember state of the devices, thus non-volatile memory is required in application side.
 
@@ -96,7 +96,33 @@ Some devices have much controls or complicated controls. Command-line interface 
 
 \section{Requirements to control units on IEEE 1394 bus}
 
+FireWire sound devices are units on IEEE 1394 bus, therefore the way to access to them is conformant to IEEE 1394.
 
+\subsection{IEEE 1212 addressing support to refer to units}
+
+IEEE 1212 defines 64bit fixed addressing scheme and IEEE 1394 utilizes the scheme. In the scheme, the address has hierarchy which consists of node ID, register space and CSR\footnote{Control and status register} offset.
+
+TODO: image
+
+The address spaces for register space and CSR offset are segmetated as specific roles below.
+
+
+\begin{table}[ht]
+	\centering
+	\caption{{Each segments in IEEE 1212 address space}}
+	\label{syt_interval}
+	\begin{tabular}{lrr}
+		\toprule
+		Name		& Start address	   & End address \\
+		\midrule
+		Memory space	& 0x0000'0000'0000 & 0xffff'efff'ffff \\
+		Private space	& 0xffff'e000'0000 & 0xffff'efff'ffff \\
+		Register space	& 0xffff'f000'0000 & 0xffff'ffff'ffff \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+Memory space is for node resources associated with memory. Private space is for vendor-dependent use and available for externally accessible bus address. Register space
 
 \subsection{IEEE 1394 transaction support to read/write registers}
 
