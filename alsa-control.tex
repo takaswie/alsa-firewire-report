@@ -40,6 +40,13 @@ In this section, I describe the Control Component.
 
 In ALSA, each card instance\footnote{struct snd\_card} has a role as a Control Component, thus each driver has no need to add specific instances for the component.
 
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[scale=0.75]{./img/alsa-control-model.svg.eps}
+	\caption{{ALSA Control component model}}
+	\label{fig:alsa-control-model}
+\end{figure}
+
 Each controllable substance of actual card is represented as an element. Each driver adds some instances of element, then, corresponding card instance manages the instances in a linked-list.
 
 The instance can includes several elements with the same feature. To distinguish the instance from single element, I describe it as element set. The element set is added by one operation and includes several element indicated by one of function parameters. Elements in the same element set have the similar features indicated by one of the function parameters..
@@ -688,7 +695,176 @@ There're two helper functions for event handling; snd\_hctl\_wait() and snd\_hct
 
 \subsection{Mixer API}
 
-Mixer API is an abstruction of the high level control API.
+The purpose of mixer API is to give helper functions to control elements with typical usage such as playback and capture, volume and switch. Originally, this API is designed as a wrapper for high level control interface. Later, this wrapper got loadable shared object to handle control elements, and applications can select them as abstraction backend. Currently, four types of backends are available; high level control, AC'97. High definition audio(hda) and python. As of ALSA library version 1.0.29, hda and python backend is still half-implemented\footnote{And the python scripts are written with Python2}.
+
+Applications call snd\_mixer\_selem\_register() with parameters to load each backend. The parameter is represented in 'struct snd\_mixer\_selem\_regopt'. This function check members of the structure and calls snd\_mixer\_selem\_none\_register() or snd\_mixer\_simple\_basic\_register().
+
+\begin{figure}[htbp]
+\small
+\begin{verbatim}
+enum snd_mixer_selem_regopt_abstract {
+    SND_MIXER_SABSTRACT_NONE = 0,
+    SND_MIXER_SABSTRACT_BASIC,
+};
+
+struct snd_mixer_selem_regopt {
+    int ver;
+    enum snd_mixer_selem_regopt_abstract abstract;
+    const char *device;
+    snd_pcm_t *playback_pcm;
+    snd_pcm_t *capture_pcm;
+};
+\end{verbatim}
+\caption{{Structure for backend options}}
+\label{fig:mixer-selem-regopt}
+\end{figure}
+
+The 'none' backend is for an bstraction of high level control. This backend is included in libasound2.so binary. The 'basic' backend is to load the other backends according to smixer.conf and the value of 'structure snd\_card.components'. These backends are represented by 'struct \_snd\_mixer\_class'. This structure has
+
+\begin{figure}[htbp]
+\small
+\begin{verbatim}
+struct _snd_mixer_class {
+    struct list_head list;
+    snd_mixer_t *mixer;
+    snd_mixer_event_t event;
+    void *private_data;
+    void (*private_free)(snd_mixer_class_t *class);
+    snd_mixer_compare_t compare;
+};
+\end{verbatim}
+\caption{{Structure for backends}}
+\label{fig:mixer-class}
+\end{figure}
+
+Each backend has own event handler. This handler is called internally when handling hctl event. When the handler is called with 'add' event, each module keeps an instance of 'struct \_snd\_mixer\_elem' by calling snd\_mixer\_elem\_new().
+
+\begin{figure}[htbp]
+\small
+\begin{verbatim}
+struct _snd_mixer_elem {
+    snd_mixer_elem_type_t type;
+    struct list_head list;
+    snd_mixer_class_t *class;
+    void *private_data;
+    void (*private_free)(snd_mixer_elem_t *elem);
+    snd_mixer_elem_callback_t callback;
+    void *callback_private;
+    bag_t helems;
+    int compare_weight;
+};
+\end{verbatim}
+\caption{{Structure for backends}}
+\label{fig:mixer-elem}
+\end{figure}
+
+When keep the instance, the function add the instance to link-list in 'struct \_snd\_mixer', which is an handler of mixer API.
+
+\begin{figure}[htbp]
+\small
+\begin{verbatim}
+struct _snd_mixer {
+    struct list_head slaves;
+    struct list_head classes;
+    struct list_head elems;
+    snd_mixer_elem_t **pelems;
+    unsigned int count;
+    unsigned int alloc;
+    unsigned int events;
+    snd_mixer_callback_t callback;
+    void *callback_private;
+    snd_mixer_compare_t compare;
+};
+\end{verbatim}
+\caption{{Structure for mixer handler}}
+\label{fig:mixer-handler}
+\end{figure}
+
+Each element is identified by 'struct \_snd\_mixer\_selem\_id'; the combination of name and index.
+
+\begin{figure}[htbp]
+\small
+\begin{verbatim}
+struct _snd_mixer_selem_id {
+    char name[60];
+    unsigned int index;
+};
+\end{verbatim}
+\caption{{Mixer element identification}}
+\label{fig:mixer-selem-id}
+\end{figure}
+
+For applications, these structures are hidden by opaque pointers. Mixer API includes halper functions to access these members.
+
+\begin{figure}[htbp]
+\small
+\begin{verbatim}
+typedef struct _snd_mixer_class snd_mixer_class_t;
+typedef struct _snd_mixer_elem snd_mixer_elem_t;
+typedef struct _snd_mixer snd_mixer_t;
+typedef struct _snd_mixer_selem_id snd_mixer_selem_id_t;
+\end{verbatim}
+\caption{{Opaque structure for mixer API}}
+\label{fig:mixer-opaque-structures}
+\end{figure}
+
+When opening the handler, applications call snd\_mixer\_open(). When closing, call snd\_mixer\_close(). Applications attach hctl handler to the mixer handler by calling snd\_mixer\_attach() with control node name. All of control elements are added to the mixer handler by calling snd\_mixer\_load(), then these elements are sorted by comparison function in the mixer handler. When applications call snd\_mixer\_free(), these elements are removed from the mixer handler. For event polling, snd\_mixer\_wait() is available. If applications need to implement poll loop, snd\_mixer\_poll\_descriptors(), snd\_mixer\_poll\_descriptors\_count() and snd\_mixer\_poll\_descriptors\_revents() are available.
+
+To retrieve first element in the link-list, applications call snd\_mixer\_first\_elem(). For last element, use snd\_mixer\_last\_elem(). To iterate the elements, use snd\_mixer\_elem\_next() and snd\_mixer\_elem\_prev(). To seek an element, use snd\_mixer\_find\_selem() with identification information.
+
+These elements are classified to two categories; direction (global/playback/capture) and feature(volume/switch/enumerated). The direction means effective range of the control. The feature means behaviour of the control. Therefore, a mixer element has a internal expression for capability of combinations between these two categories.
+
+\begin{figure}[htbp]
+\small
+\begin{verbatim}
+#define SM_CAP_GVOLUME		(1<<1)
+#define SM_CAP_GSWITCH		(1<<2)
+#define SM_CAP_PVOLUME		(1<<3)
+#define SM_CAP_PVOLUME_JOIN	(1<<4)
+#define SM_CAP_PSWITCH		(1<<5)
+#define SM_CAP_PSWITCH_JOIN	(1<<6)
+#define SM_CAP_CVOLUME		(1<<7)
+#define SM_CAP_CVOLUME_JOIN	(1<<8)
+#define SM_CAP_CSWITCH		(1<<9)
+#define SM_CAP_CSWITCH_JOIN	(1<<10)
+#define SM_CAP_CSWITCH_EXCL	(1<<11)
+#define SM_CAP_PENUM		(1<<12)
+#define SM_CAP_CENUM		(1<<13)
+\end{verbatim}
+\caption{{Defined capability flags for mixer element}}
+\label{fig:mixer-element-capability}
+\end{figure}
+
+The 'join' means that all of channels included the mixer control are combined to move. The 'excl' means that the mixer element is a part of mixer element group and one of them is available\footnote{Actuallythis flag is meaningless because ALSA lib has a lack of related implementation.}.
+
+Each mixer element has a set of value corresponding to the number of channels, as control element has. In mixer API, these values are represented as corresponding role. The usual roles are defined as 9 types: front left, front right, rear left, rear right, front center, woofer, side left, side right, rear center.
+
+\begin{figure}[htbp]
+\small
+\begin{verbatim}
+typedef enum _snd_mixer_selem_channel_id {
+	SND_MIXER_SCHN_UNKNOWN = -1,
+	SND_MIXER_SCHN_FRONT_LEFT = 0,
+	SND_MIXER_SCHN_FRONT_RIGHT,
+	SND_MIXER_SCHN_REAR_LEFT,
+	SND_MIXER_SCHN_REAR_RIGHT,
+	SND_MIXER_SCHN_FRONT_CENTER,
+	SND_MIXER_SCHN_WOOFER,
+	SND_MIXER_SCHN_SIDE_LEFT,
+	SND_MIXER_SCHN_SIDE_RIGHT,
+	SND_MIXER_SCHN_REAR_CENTER,
+	SND_MIXER_SCHN_LAST = 31,
+	SND_MIXER_SCHN_MONO = SND_MIXER_SCHN_FRONT_LEFT
+} snd_mixer_selem_channel_id_t;
+\end{verbatim}
+\caption{{Defined IDs for each channels}}
+\label{fig:mixer-selem-channel-id}
+\end{figure}
+
+To check status of the retrieved element, use snd\_mixer\_selem\_is\_xxx() such as snd\_mixer\_selem\_is\_active(). To check the retrieved element has a certain feature, use snd\_mixer\_selem\_has\_xxx() function series such as snd\_mixer\_selem\_has\_playback\_volume(). To convert between linear value and logarithmic value, use snd\_mixer\_selem\_ask\_xxx() such as snd\_mixer\_selem\_ask\_playback\_dB\_vol().
+
+To get the value of a channel, use snd\_mixer\_selem\_get\_xxx() functions such as snd\_mixer\_selem\_get\_playback\_volume(). Especially, there're 'all' type of set function such as snd\_mixer\_selem\_set\_capture\_switch\_all().
+
 
 \subsection{Use Case Manager}
 
@@ -702,16 +878,13 @@ Hctl header has no snd\_hctl\_async.
 
 \addcontentsline{toc}{section}{References}
 
-\bibitem{alsa-firewire-report}
-Enhancement of ALSA firewire stack (2015, Takashi Sakamoto) \\
-https://github.com/takaswie/alsa-firewire-report
-
 \bibitem{alsa-driver}
 Writing an ALSA Driver (2005, Takashi Iwai) \\
 http://www.alsa-project.org/main/index.php/ALSA\_Driver\_Documentation
 
-\bibitem{ieee1394-1}
-hoge
+\bibitem{}
+Enhancement of ALSA firewire stack (2015, Takashi Sakamoto) \\
+https://github.com/takaswie/alsa-firewire-report
 
 \end{thebibliography}
 
