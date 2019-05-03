@@ -1,0 +1,105 @@
+
+
+Fireworks
+
+Fireworks is a solution for applications of Audio and Music units on IEEE 1394 bus. This solution is a combination of some ICs and their firmwares. The center of this solution is Texus Instruments TSB43CB43A\footnote{http://www.ti.com/product/TSB43CB43A}, a.k.a IceLynx Micro. Texus Instruments designed IceLynx Micro for all-in-one solution for audio and video consumer electronics applications. IceLynx Micro supports physical and link layer of IEEE 1394 specification and IEC 61883-1/2/3/4/5/6 protocol. Texus Instruments integrated ARM7TDMI processor into IceLynx Micro used for transaction functionality.
+
+Echo Audio has United States patent 7,599,388. This patent is about an invention to use IceLynx Micro for multichannel device. According to the patent, Release To Manufacturing (RTM) of IceLynx Micro has Inter IC Square (I2S) interfaces to support up to 6 channels of audio data. Echo Audio devised to support more channels. ARM7TDMI processor is used to communicate to second processor for serial data via dual-banked shared memory. It transmits and receives the serial data for FIFOs on IceLynx Micro. For the dual-banked shared memory, Intel Advanced+ Boot Block Flash Memory (TE28F160C3) is used.
+
+Fireworks has three generations in a point of the combination of ICs. The first generation uses Texus Instruments TMS320C6713\footnote{http://www.ti.com/tool/TMDSDSK6713} as the second processor, and Xilinx FPGA as serial audio interface for ADC/DAC. This generaion has one model; Onyx 1200F from Mackie of LOUD Technologies. The second generation uses TMS320C6713 as the second processor and serial audio interface for ADC/DAC. This generation has some models; Onyx 400F from Mackie of LOUD Technologies, AudioFire12 and AudioFire8 (until July 2009) from Echo Audio. The third generation uses Xilinx SPARTAN XC3S250E as the second processor and serial audio interface for ADC/DAC. This generation has several models; AudioFire2, AudioFire4, AudioFire8 (since July 2009), AudioFirePre8 from Echo Audio, Robot Interface Pack (RIP) from Gibson.
+
+Fireworks supports unique mechanism of command and response. The command has 10 categories according to its effects; e.g. multiplexer control and flash memory operation. The command and response is transferred by two types of transactions; specific address for command and response and VENDOR-dependent commands of generic AV/C Digital Interface Command Set.
+
+Fireworks supports two modes for isochronous packet; Windows-specific mode and IEC 61883-1/6 compliant mode. Actual record of packets in the former mode for AudioFirePre8 is shown in Table 1 and Table 2.
+
+Table 1. 44.1 kHz, rx, tx
+
+6,3518,022840a0,00000000,0003863d,018c41a0,00100000,9000ffff
+6,3519,022840a0,00000000,0003863e,018c41a0,ffffffff,ffffffff
+6,3520,000800a0,01110002,90ffffff,018c41a0,00100000,9000ffff
+6,3521,022840a0,00000000,0003863f,018c41a0,00100000,9000ffff
+6,3522,022840a0,00000000,00038640,018c41a0,ffffffff,ffffffff
+6,3523,000800a0,01110002,90ffffff,018c41a0,00100000,9000ffff
+6,3524,022840a0,00000000,00038641,018c41a0,00100000,9000ffff
+6,3525,022840a0,00000000,00038642,(skipped)
+6,3526,000800a0,01110002,90ffffff,(skipped)
+6,3527,022840a0,00000000,00038643,(skipped)
+6,3528,022840a0,00000000,00038644,018c41a0,00100000,9000ffff
+6,3529,000800a0,01110002,90ffffff,018c41a0,00100000,9000ffff
+6,3530,022840a0,00000000,00038645,018c41a0,00100000,9000ffff
+6,3531,022840a0,00000000,00038646,018c41a0,ffffffff,ffffffff
+6,3532,022840a0,00000000,00038647,018c41a0,00100000,9000ffff
+6,3533,000800a0,01110002,90ffffff,018c41a0,00100000,9000ffff
+
+Table 2. 48.0 kHz, rx, tx
+
+7,606,022840a0,00000000,0000c9fe,018c41a0,00100000,9000ffff
+7,607,000800a0,01110002,90ffffff,018c41a0,00100000,9000ffff
+7,608,022840a0,00000000,0000c9ff,018c41a0,ffffffff,ffffffff
+7,609,022840a0,00000000,0000ca00,018c41a0,00100000,9000ffff
+7,610,022840a0,00000000,0000ca01,018c41a0,00100000,9000ffff
+7,611,000800a0,01110002,90ffffff,018c41a0,00100000,9000ffff
+7,612,022840a0,00000000,0000ca02,(skipped)
+7,613,022840a0,00000000,0000ca03,(skipped)
+7,614,022840a0,00000000,0000ca04,(skipped)
+7,615,000800a0,01110002,90ffffff,(skipped)
+7,616,022840a0,00000000,0000ca05,018c41a0,00100000,9000ffff
+7,617,022840a0,00000000,0000ca06,018c41a0,00100000,9000ffff
+7,618,022840a0,00000000,0000ca07,018c41a0,00100000,9000ffff
+7,619,000800a0,01110002,90ffffff,018c41a0,00100000,9000ffff
+7,620,022840a0,00000000,0000ca08,018c41a0,ffffffff,ffffffff
+7,621,022840a0,00000000,0000ca09,018c41a0,00100000,9000ffff
+
+In this mode, Fireworks transmits isochronous packets (tx packets) with skipped isochronous cycle. On the other hand, Windows driver transmits isochronous packets (rx packets) every isochronous cycle. Although the first and second quadlets are slightly similar to IEC 61883-6, both quadlets don't include enough information for it. In tx packets, the first and second quadlet includes 0xffffffff if it's NOINFO packet described in IEC 61883-6. In rx packets, the second quadlet represents accumulated cycle count.
+
+In this mode, both of Fireworks and the driver transmit no information about presentation timestamp. Besides transmission of tx packets is skipped in some isochronous cycles, periodically. Therefore Fireworks and the driver seems to packetize according to pre-programmed way without information in handling packets.
+
+I prepare program to count data blocks in captured isochronous packet and print the sequence of isochronous cycle when the same number of data blocks as sampling transfer frequency. For 44.1 kHz sampling transfer frequency, it counts 88200 data blocks. For 48.0 kHz sampling transfer frequency, it counts 48000 data block. The results are shown in Table 3, Table 4, Table 5 and Table 6.
+
+Table 3. 44.1 kHz, tx
+
+4 2098 88200
+6 2098 88200
+0 2097 88200
+2 2098 88200
+4 2097 88200
+6 2095 88200
+0 2096 88200
+2 2095 88200
+
+Table 4. 44.1 kHz, rx
+
+4 2099 88200
+6 2098 88200
+0 2098 88200
+2 2097 88200
+4 2097 88200
+6 2096 88200
+0 2096 88200
+2 2095 88200
+
+Table 5. 48.0 kHz, tx
+
+0 6027 48000
+1 6026 48000
+2 6026 48000
+3 6026 48000
+4 6026 48000
+5 6025 48000
+6 6025 48000
+7 6026 48000
+
+Table 6. 48.0 kHz, rx
+
+0 6027 48000
+1 6026 48000
+2 6026 48000
+3 6026 48000
+4 6026 48000
+5 6026 48000
+6 6025 48000
+7 6025 48000
+
+According to the result, the sequence of rx packet is different from the one of tx packet. Both of Fireworks and Windows driver transmit data blocks slightly more than sampling transfer frequency per 8000 cycles.
+
+IEC 61883-1/6 compliant mode is for build-in macOS driver for IEC 61883-1/6. The driver handles the other types of device; e.g. OXFW970/971 based models.
